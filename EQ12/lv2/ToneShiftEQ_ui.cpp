@@ -333,10 +333,10 @@ LV2UI_Handle XToneShiftEQ_UI::instantiate(const LV2UI_Descriptor* descriptor,
     main_init(self->sw.getMain());
 
     #if defined(_WIN32)
-    self->sw.top  = create_window(self->sw.getMain(), (HWND) self->parentXwindow, 0, 0, 930, 430);
+    self->sw.top  = create_window(self->sw.getMain(), (HWND) self->parentXwindow, 0, 0, 930, 460);
     self->sw.top->func.expose_callback = self->sw.draw_window;
     #else
-    self->sw.top  = create_window(self->sw.getMain(), (Window) self->parentXwindow, 0, 0, 930, 430);
+    self->sw.top  = create_window(self->sw.getMain(), (Window) self->parentXwindow, 0, 0, 930, 460);
     self->sw.top->func.expose_callback = self->sw.draw_window;
     #endif
     self->sw.create();
@@ -345,7 +345,7 @@ LV2UI_Handle XToneShiftEQ_UI::instantiate(const LV2UI_Descriptor* descriptor,
     *widget = (LV2UI_Widget)self->sw.top->widget;
 
     if (self->resize){
-        self->resize->ui_resize(self->resize->handle, 930, 430);
+        self->resize->ui_resize(self->resize->handle, 930, 460);
     }
 
     return (LV2UI_Handle)self;

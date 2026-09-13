@@ -53,6 +53,13 @@ public:
     
     ~LV2Connector() {}
 
+    uint32_t getInstanceID() {
+        return 1;
+    }
+
+    void setInstance(void* ptr) {
+    }
+
     // send value changes from GUI to the engine/host
     void sendValueChanged(int index, float value) override {
         if (index < 128) {
@@ -93,6 +100,23 @@ public:
         return 0;
     }
 
+    // multi instance spectrum stub
+    bool checkNewData(void* ptr) override {
+        return 0;
+    }
+
+    int getBins(void* ptr) override {
+        return 0;
+    }
+
+    const float* getMagnitudes(void* ptr) override {
+        return nullptr;
+    }
+
+    void clearAna(void* ptr) override {
+    }
+
+    // single instance spectrum stub
     bool checkNewData() override {
         return 0;
     }

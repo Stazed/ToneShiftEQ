@@ -16,7 +16,7 @@
 typedef struct toneshifteq_plugin_t toneshifteq_plugin_t;
 
 #define WINDOW_WIDTH  930
-#define WINDOW_HEIGHT 430
+#define WINDOW_HEIGHT 460
 
 #if defined(_WIN32)
 #define GUIAPI CLAP_WINDOW_API_WIN32
@@ -462,6 +462,7 @@ static bool toneshifteq_activate(const struct clap_plugin *plugin,
                              uint32_t                  max_frames_count) {
     toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
     plug->r->initEngine(sample_rate, 25, 1);
+    plug->isInited = true;
     plug->r->engine.param.setParam(84,(int)plug->mode);
     if(!plug->state.empty()) plug->r->readState(plug->state);
     return true;

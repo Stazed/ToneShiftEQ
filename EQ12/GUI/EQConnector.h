@@ -30,6 +30,16 @@ public:
     
     ~StandaloneConnector() {}
 
+    uint32_t getInstanceID() {
+        if (!engine) return 0;
+        return engine->getInstanceID();
+    }
+
+    void setInstance(void* ptr) {
+        engine = (Engine*) ptr;
+        //engine->dataReady.store(true, std::memory_order_release);
+    }
+
     // send value changes from GUI to the engine/host
     void sendValueChanged(int index, float value) override {
         engine->param.setParam(index, value);
@@ -72,6 +82,28 @@ public:
         return engine->vuin->getMeterR();
     }
 
+    // multi instance spectrum
+    bool checkNewData(void* ptr) override {
+        Engine* e = (Engine*) ptr;
+        return e->ana->hasNewData();
+    }
+
+    int getBins(void* ptr) override {
+        Engine* e = (Engine*) ptr;
+        return e->ana->getBins();
+    }
+
+    const float* getMagnitudes(void* ptr) override {
+        Engine* e = (Engine*) ptr;
+        return e->ana->getMagnitudes();
+    }
+
+    void clearAna(void* ptr) override {
+        Engine* e = (Engine*) ptr;
+        e->ana->clearFlag();
+    }
+
+    // single instance spectrum
     bool checkNewData() override {
         return engine->ana->hasNewData();
     }

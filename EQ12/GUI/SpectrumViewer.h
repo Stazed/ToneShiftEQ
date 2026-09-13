@@ -22,11 +22,14 @@
 #include "IRtoEQ.h"
 #include "xwidgets.h"
 #include "widgets.cc"
+#include "TextEntry.h"
 #include "AudioFile.h"
 #include "EQController.h"
 #include "IConnector.h"
 
-class SpectrumViewer {
+#include "InstanceRegistry.h"
+
+class SpectrumViewer : public TextEntry {
 public:
     using Vec = std::vector<float>;
     bool run = false;
@@ -36,19 +39,19 @@ public:
 
     Widget_t* top = nullptr;
     Widget_t* bp = nullptr;
-    Widget_t* frame[FilterTypes::NumFilters];
-    Widget_t* ftype[FilterTypes::NumFilters];
-    Widget_t* fenable[FilterTypes::NumFilters];
-    Widget_t* freq[FilterTypes::NumFilters];
-    Widget_t* fq[FilterTypes::NumFilters];
-    Widget_t* fgain[FilterTypes::NumFilters];
-    Widget_t* solo[FilterTypes::NumFilters];
-    Widget_t* mute[FilterTypes::NumFilters];
-    Widget_t* prev[FilterTypes::NumFilters];
-    Widget_t* next[FilterTypes::NumFilters];
-    Widget_t* threshold[FilterTypes::NumFilters];
-    Widget_t* ratio[FilterTypes::NumFilters];
-    Widget_t* com_ex[FilterTypes::NumFilters];
+    Widget_t* frame[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* ftype[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* fenable[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* freq[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* fq[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* fgain[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* solo[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* mute[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* prev[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* next[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* threshold[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* ratio[FilterTypes::NumFilters] = {nullptr};
+    Widget_t* com_ex[FilterTypes::NumFilters] = {nullptr};
 
     Widget_t* lowcut = nullptr;
     Widget_t* highcut = nullptr;
@@ -71,10 +74,12 @@ public:
     Widget_t* gthr = nullptr;
     Widget_t* gthrv = nullptr;
     Widget_t* dyn = nullptr;
+    Widget_t* topframe = nullptr;
 
     std::atomic<bool> havePreset {false};
     std::vector<double> dstL;
     std::vector<double> dstR;
+    std::vector<InstanceRegistry::Instance> instances;
 
     SpectrumViewer(IConnector *conn_) {
         conn = conn_;
@@ -101,9 +106,9 @@ public:
     }
 
     void setSpec(const float* data, int bin) {
-        mag_.clear();
+        mag_[0].clear();
         for (int i = 0; i<bin; i++) {
-            mag_.push_back(data[i]);
+            mag_[0].push_back(data[i]);
         }
         os_expose_widget(spec);
     }
@@ -124,7 +129,7 @@ public:
         }
     }
 
-    void init(int width = 930, int height = 430) {
+    void init(int width = 930, int height = 460) {
         main_init(&main);
         top = create_window(&main, os_get_root_window(&main, IS_WINDOW), 0, 0, width, height);
         widget_set_title(top, "ToneShift-EQ12");
@@ -133,11 +138,24 @@ public:
         top->func.expose_callback = draw_window;
     }
 
-    void create(int width = 930, int height = 430) {
+    void create(int width = 930, int height = 460) {
+        topframe = add_my_frame(top,"", 1, 1, width-2, 28);
+        topframe->scale.gravity = NORTHEAST;
+        instanceID = conn->getInstanceID(); // default engine
+        inputVisible =  add_input_eye_button(topframe, 10, 4, 20, 20);
+        inputVisible->parent_struct = this;
+        set_widget_color(inputVisible, (Color_state)0, (Color_mod)0, 0.2, 0.75, 0.45, 1.0);
+        adj_set_value(inputVisible->adj, (float)inVisible);
+        inputVisible->func.value_changed_callback = input_visible;
+        createSelectors();
+        #ifdef LV2PLUG
+        isVisible[0] = 1;
+        #endif
+
         spec_width  = 0;
         spec_height = 0;
 
-        spec = create_widget(&main, top,65, 0, width-130, height);
+        spec = create_widget(&main, top,65, 30, width-130, height-30);
         os_set_input_mask(spec);
 
         spec->parent_struct = this;
@@ -156,7 +174,7 @@ public:
         top->func.key_press_callback = get_key;
         top->func.key_release_callback = release_key;
 
-        Widget_t* ginframe = add_my_frame(top,"", 1, 0, 64, height-82);
+        Widget_t* ginframe = add_my_frame(top,"", 1, 30, 64, height-112);
         ginframe->scale.gravity = EASTNORTH;
         vuinmeterL = add_my_left_vmeter(ginframe, "Meter", true, 3, 5, 10, height-88);
         vuinmeterL->scale.gravity = WESTSOUTH;
@@ -168,7 +186,7 @@ public:
         set_adjustment(vuing->adj,0.0, 0.0, -46.0, 12.0, 0.1, CL_CONTINUOS);
         vuing->func.value_changed_callback = set_ingain;
 
-        Widget_t* linframe = add_my_frame(top,"", 1, 350, 64, 80);
+        Widget_t* linframe = add_my_frame(top,"", 1, 380, 64, 80);
         linframe->scale.gravity = EASTWEST;
 
         side = add_my_input_button(linframe, 16, 0, 40, 40);
@@ -184,7 +202,7 @@ public:
         set_adjustment(gthrv->adj,0.0, 0.0, -46.0, 0.0, 0.1, CL_CONTINUOS);
         gthrv->func.value_changed_callback = set_global_threshold_value;
 
-        Widget_t* gframe = add_my_frame(top,"", width-65, 0, 64, height-82);
+        Widget_t* gframe = add_my_frame(top,"", width-65, 30, 64, height-112);
         gframe->scale.gravity = WESTSOUTH;
         vumeterL = add_my_vmeter(gframe, "Meter", false, 25, 5, 10, height-88);
         vumeterL->scale.gravity = WESTSOUTH;
@@ -196,7 +214,7 @@ public:
         set_adjustment(vug->adj,0.0, 0.0, -46.0, 12.0, 0.1, CL_CONTINUOS);
         vug->func.value_changed_callback = set_gain;
 
-        Widget_t* lframe = add_my_frame(top,"", width-65, 350, 64, 80);
+        Widget_t* lframe = add_my_frame(top,"", width-65, 380, 64, 80);
         lframe->scale.gravity = SOUTHWEST;
         curFreq = add_my_label(lframe, "",3,0,60,20);
         curGain = add_my_label(lframe, "",3,20,60,20);
@@ -552,40 +570,49 @@ public:
     }
 
     void check_spec() {
+        instances = InstanceRegistry::instance().getInstances();
+        uint32_t iocount = InstanceRegistry::instance().instanceCount();
+        if (iocount != icount) createSelectors();
+
         adj_set_value(vumeterL->adj, power2db(vumeterL, conn->getMeterL()));
         adj_set_value(vumeterR->adj, power2db(vumeterR, conn->getMeterR()));
         adj_set_value(vuinmeterL->adj, power2db(vuinmeterL, conn->getInMeterL()));
         adj_set_value(vuinmeterR->adj, power2db(vuinmeterR, conn->getInMeterR()));
         bool setRefresh = false;
         if (conn->checkNewInData()) {
-            bin = conn->getInBins();
+            bin[0] = conn->getInBins();
             magin_.clear();
             const float* m = conn->getInMagnitudes();
-            for (int i = 0; i<bin; i++) {
+            for (int i = 0; i<bin[0]; i++) {
                 magin_.push_back(m[i]);
             }
             conn->clearInAna();
             setRefresh = true;
         }
-        if (conn->checkNewData()) {
-            bin = conn->getBins();
-            mag_.clear();
-            const float* m = conn->getMagnitudes();
-            for (int i = 0; i<bin; i++) {
-                mag_.push_back(m[i]);
+        int p = 0;
+        for (const auto& instance : instances) {
+            if (conn->checkNewData(instance.ptr)) {
+                bin[p] = conn->getBins(instance.ptr);
+                mag_[p].clear();
+                const float* m = conn->getMagnitudes(instance.ptr);
+                for (int i = 0; i<bin[p]; i++) {
+                    mag_[p].push_back(m[i]);
+                }
+                //conn->clearAna(instance.ptr);
+                setRefresh = true;
             }
-            conn->clearAna();
-            setRefresh = true;
+            p++;
         }
         if (setRefresh) expose_widget(spec);
     }
 
     void check_irmatch() {
-        if (conn->haveData()) {
+        if (conn->haveData() || instanceChanged) {
             setData(conn->getIR());
             setPhase(conn->getPhase());
             rebuild_eq_layer = true;
             expose_widget(spec);
+            instanceChanged = false;
         }
     }
 
@@ -604,13 +631,26 @@ private:
     Widget_t* curFreq = nullptr;
     Widget_t* curGain = nullptr;
     Widget_t* ph = nullptr;
+    Widget_t* inputVisible = nullptr;
+    int inVisible = 1;
+
+    Widget_t* instanceSelect[12] = {nullptr};
+    Widget_t* instanceVisible[12] = {nullptr};
+    Widget_t* instanceName = nullptr;
+    std::string iname[12];
+    int isVisible[12] = {0};
+    uint32_t instanceID = 0;
+
     IConnector* conn = nullptr;
     AudioFile af;
     APOReader reader;
     Vec ir_; // filter
     Vec phase_; // phase
-    Vec mag_; // spectrum
+    Vec mag_[12]; // spectrum
     Vec magin_; // input spectrum
+
+    uint32_t icount = 0;
+    bool instanceChanged = false;
 
     char cfreq[64];
     char cgain[64];
@@ -623,7 +663,7 @@ private:
     int selected_band = -1;
     int mx = 0;
     int my = 0;
-    int bin = 0;
+    int bin[12] = {0};
     int spec_width  = 0;
     int spec_height = 0;
     cairo_surface_t *eq_layer = nullptr;
@@ -654,6 +694,87 @@ private:
         std::vector<double> freq;
         std::vector<std::complex<double>> zInv, zInv2, alpha;
     };
+
+    typedef struct {
+        double r, g, b, a;
+    } InstanceShade_t;
+
+    void createSelectors() {
+        for (int i = 0; i < 12; i++) {
+            if (instanceSelect[i]) {
+                destroy_widget(instanceSelect[i], &main);
+                destroy_widget(instanceVisible[i], &main);
+                instanceSelect[i] = nullptr;
+                instanceVisible[i] = nullptr;
+            }
+        }
+        destroy_widget(instanceName, &main);
+        instanceName = nullptr;
+        int p = 0;
+        int ins = 0;
+        int x = 60;
+        bool setNew = false;
+        instances = InstanceRegistry::instance().getInstances();
+        icount = InstanceRegistry::instance().instanceCount();
+        uint32_t id = conn->getInstanceID();
+        auto* inst = InstanceRegistry::instance().getInstanceByID(id);
+        for (const auto& instance : instances) {
+            iname[p] = InstanceRegistry::instance().getInstanceName(instance.id);
+            instanceSelect[p] = add_my_toggle_button(topframe, x, 4, 60, 20, iname[p].c_str());
+            instanceSelect[p]->data = instance.id;
+            instanceSelect[p]->flags |= IS_RADIO;
+            instanceSelect[p]->parent_struct = this;
+            if (!inst) {
+                conn->setInstance(instance.ptr);
+                id = instance.id;
+                adj_set_value(instanceSelect[p]->adj, 1.0);
+                setNew = true;
+            }
+            if (instanceID == instance.id) {
+                ins = p;
+            }
+            if (id == instance.id) {
+                adj_set_value(instanceSelect[p]->adj, 1.0);
+                isVisible[p] = 1;
+            }
+            instanceSelect[p]->func.value_changed_callback = select_instance;
+
+            instanceVisible[p] = add_instance_eye_button(topframe, x - 20, 4, 20, 20);
+            instanceVisible[p]->parent_struct = this;
+            instanceVisible[p]->data = p;
+            set_widget_color(instanceVisible[p], (Color_state)0, (Color_mod)0, instance_shades[p].r, instance_shades[p].g, instance_shades[p].b, 1.0);
+            adj_set_value(instanceVisible[p]->adj, (float)isVisible[p]);
+            instanceVisible[p]->func.value_changed_callback = instance_visible;
+
+            p++;
+            x += 90;
+        }
+        instanceName = add_my_button(topframe, 830, 4, 100, 20, iname[ins].c_str());
+        instanceName->parent_struct = this;
+        instanceName->func.button_release_callback = set_name;
+        widget_show_all(topframe);
+        if (setNew) select_instance(instanceSelect[0], nullptr);
+    }
+
+
+    // pop up a text entry to enter a name for the instance
+    void setInstanceName() {
+        Widget_t* dia = showTextEntry(top, 
+                    "ToneShiftEQ - set instance name:", "name:");
+        int x1, y1;
+        os_translate_coords( top, top->widget, 
+            os_get_root_window(top->app, IS_WIDGET), 0, 0, &x1, &y1);
+        os_move_window(top->app->dpy,dia,x1+190, y1+80);
+        top->func.dialog_callback = [] (void *w_, void* user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            if(user_data !=NULL && strlen(*(const char**)user_data)) {
+                auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
+                uint32_t id = self->conn->getInstanceID();
+                InstanceRegistry::instance().registerInstanceName(id, (*(const char**)user_data));
+                self->createSelectors();
+            }
+        };
+    }
 
     void reset_to_default() {
         for (int i = 0; i < FilterTypes::NumFilters; ++i) {
@@ -904,6 +1025,111 @@ private:
         }
     }
 
+    void copyValuesToGui(Widget_t* wid, float value) {
+        if (!wid) return;
+        xevfunc store = wid->func.value_changed_callback;
+        wid->func.value_changed_callback = null_callback;
+        adj_set_value(wid->adj, value);
+        wid->func.value_changed_callback = store;
+    }
+
+    void syncUI() {
+        copyValuesToGui(bp,         (float)conn->getParameterValue(0));
+        
+        for (int i = 0; i< 12; i++) {
+            copyValuesToGui(fenable[i], (float)conn->getParameterValue(i*6 +1));
+            copyValuesToGui(ftype[i],   (float)conn->getParameterValue(i*6 +2));
+            copyValuesToGui(mute[i],    (float)conn->getParameterValue(i*6 +3));
+            copyValuesToGui(freq[i],    (float)conn->getParameterValue(i*6 +4));
+            copyValuesToGui(fgain[i],   (float)conn->getParameterValue(i*6 +5));
+            copyValuesToGui(fq[i],      (float)conn->getParameterValue(i*6 +6));
+        }
+
+        if (conn->getParameterValue(74)) copyValuesToGui(solo[(int)conn->getParameterValue(73)], 1.0);
+
+        copyValuesToGui(lowcut,     (float)conn->getParameterValue(76));
+        copyValuesToGui(highcut,    (float)conn->getParameterValue(78));
+
+        copyValuesToGui(smooth,     (float)conn->getParameterValue(79));
+        copyValuesToGui(dynamics,   (float)conn->getParameterValue(80));
+        //copyValuesToGui(tilt,       (float)conn->getParameterValue(81));
+
+        copyValuesToGui(vug,        (float)conn->getParameterValue(82));
+        copyValuesToGui(hf_fade,    (float)conn->getParameterValue(83));
+        copyValuesToGui(mode,       (float)conn->getParameterValue(84));
+
+        for (int i = 0; i< 12; i++) {
+            copyValuesToGui(threshold[i], (float)conn->getParameterValue(85 + i));
+        }
+        for (int i = 0; i< 12; i++) {
+            copyValuesToGui(ratio[i], (float)conn->getParameterValue(97 + i));
+        }
+        copyValuesToGui(vuing,       (float)conn->getParameterValue(109));
+        copyValuesToGui(side,        (float)conn->getParameterValue(110));
+        copyValuesToGui(gthr,        (float)conn->getParameterValue(111));
+        copyValuesToGui(gthrv,       (float)conn->getParameterValue(112));
+
+        zoom_step = (int)conn->getParameterValue(113);
+        threshold_tilt = conn->getParameterValue(114);
+
+        copyValuesToGui(dyn,         (float)conn->getParameterValue(115));
+        dyn_s = adj_get_value(dyn->adj);
+
+        for (int i = 0; i< 12; i++) {
+            copyValuesToGui(com_ex[i], (float)conn->getParameterValue(116 + i));
+        }
+        set_controller_mode();
+        instanceChanged = true;
+        updateDbRange();
+    }
+
+    static void select_instance(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
+        Widget_t * p = (Widget_t*)w->parent;
+        int i = 0;
+        for(;i<p->childlist->elem;i++) {
+            Widget_t *wid = p->childlist->childs[i];
+            if (wid->adj && wid->flags & IS_RADIO) {
+                xevfunc store = wid->func.value_changed_callback;
+                wid->func.value_changed_callback = null_callback;
+                if (wid != w) {
+                    adj_set_value(wid->adj, 0.0);
+                    wid->state = 0;
+                }
+                wid->func.value_changed_callback = store;
+            }
+        }
+        if ((uint32_t)w->data != self->conn->getInstanceID()) {
+            auto* inst = InstanceRegistry::instance().getInstanceByID((uint32_t)w->data);
+            self->conn->setInstance(inst);
+            self->syncUI();
+        } else self->copyValuesToGui(w,1.0);
+    }
+
+    static void instance_visible(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
+        self->isVisible[w->data] = (int)adj_get_value(w->adj);
+    }
+
+    static void input_visible(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
+        self->inVisible = (int)adj_get_value(w->adj);
+    }
+
+    static void set_name(void *w_, void *xbutton_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
+        if (w->flags & HAS_POINTER) {
+            if(xbutton->button == Button1) {
+                auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
+                self->setInstanceName();
+            }
+        }
+    }
+
     void raise_control_panel(int a) {
         for(int i = 0; i < FilterTypes::NumFilters; i++) {
             widget_hide(frame[i]);
@@ -1091,6 +1317,20 @@ private:
                 if (self->band_match) {
                     int v = (int)adj_get_value(self->fenable[self->match_band]->adj);
                     adj_set_value(self->fenable[self->match_band]->adj, v ? 0.0 : 1.0);
+                } else {
+                    Metrics_t m;
+                    os_get_window_metrics(w, &m);
+                    const int width  = m.width;
+                    const int height = m.height - (80 * w->app->hdpi);
+                    float target_freq = x_to_freq(xbutton->x, self->f_min, self->f_max, width);
+                    float target_gain = y_to_db(xbutton->y, self->db_min, self->db_max, height);
+                    int band = self->find_band_for_freq(target_freq, true);
+                    self->selected_band = self->match_band = band;
+                    self->band_match = true;
+                    adj_set_value(self->freq[band]->adj, target_freq);
+                    adj_set_value(self->fgain[band]->adj, target_gain);
+                    adj_set_value(self->fenable[band]->adj, 1.0);
+                    self->raise_control_panel(band);
                 }
             } if(xbutton->state & ShiftMask) {
                 self->dynamic_threshold = true;
@@ -1142,7 +1382,7 @@ private:
         expose_widget(self->curGain);
     }
 
-    int find_band_for_freq(float target_freq) {
+    int find_band_for_freq(float target_freq, bool enabled) {
         static const float band_min[FilterTypes::NumFilters] = {
             20.0f, 40.0f, 70.0f, 120.0f, 200.0f, 350.0f,
             650.0f, 1100.0f, 1800.0f, 3500.0f, 6000.0f, 10000.0f
@@ -1153,17 +1393,24 @@ private:
         };
 
         for (int i = 0; i < FilterTypes::NumFilters; ++i) {
+            int v = (int)adj_get_value(fenable[i]->adj);
             if (target_freq >= band_min[i] && target_freq <= band_max[i])
-                return i;
+                if (!enabled || !v) return i;
         }
         int best = 0;
+        int next_best = 0;
         float best_dist = 1e9f;
         for (int i = 0; i < FilterTypes::NumFilters; ++i) {
             float center = adj_get_value(freq[i]->adj);
             float dist = std::abs(std::log(target_freq / center));
-            if (dist < best_dist) { best_dist = dist; best = i; }
+            if (dist < best_dist) {
+                best_dist = dist;
+                int v = (int)adj_get_value(fenable[i]->adj);
+                if (!enabled || !v) best = i;
+                next_best = i;
+            }
         }
-        return best;
+        return best == 0 ? next_best : best;
     }
 
     static void mouse_in_spec(void *w_, void *xmotion_, void* user_data) {
@@ -1186,7 +1433,7 @@ private:
             float target_freq = x_to_freq(x1, self->f_min, self->f_max, width);
             float target_gain = y_to_db(y1, self->db_min, self->db_max, height);
 
-            int band = self->find_band_for_freq(target_freq);
+            int band = self->find_band_for_freq(target_freq, false);
 
             target_gain = std::clamp(target_gain, -48.0f, 24.0f);
             adj_set_value(self->fgain[band]->adj, target_gain);
@@ -1311,13 +1558,34 @@ private:
         return std::exp(log_f);
     }
 
+    // Drawing
+
     static void draw_text(cairo_t* cr, float x, float y, const char* txt) {
         cairo_move_to(cr, std::max<float>(5.0f, x), y);
         cairo_text_path (cr, txt);
         cairo_fill (cr);
     }
 
-    // Drawing
+    static void draw_callback(void* w_, void* user_data) {
+        Widget_t* w = (Widget_t*)w_;
+        auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
+        self->draw(w_);
+    }
+
+    static constexpr InstanceShade_t instance_shades[12] = {
+        { 0.86, 0.58, 0.42, 1.0 },
+        { 0.72, 0.67, 0.38, 1.0 },
+        { 0.54, 0.72, 0.40, 1.0 },
+        { 0.40, 0.70, 0.52, 1.0 },
+        { 0.38, 0.70, 0.64, 1.0 },
+        { 0.38, 0.64, 0.76, 1.0 },
+        { 0.40, 0.54, 0.76, 1.0 },
+        { 0.49, 0.46, 0.75, 1.0 },
+        { 0.61, 0.43, 0.73, 1.0 },
+        { 0.73, 0.43, 0.67, 1.0 },
+        { 0.82, 0.45, 0.56, 1.0 },
+        { 0.84, 0.50, 0.44, 1.0 },
+    };
 
     struct Theme {
         // background
@@ -1352,12 +1620,6 @@ private:
         double band_line_alpha = 0.95;
     };
     Theme t;
-
-    static void draw_callback(void* w_, void* user_data) {
-        Widget_t* w = (Widget_t*)w_;
-        auto* self = static_cast<SpectrumViewer*>(w->parent_struct);
-        self->draw(w_);
-    }
 
     static void get_band_color(int i, double &r, double &g, double &b) {
         switch(i) {
@@ -1758,6 +2020,7 @@ private:
             get_band_color(i, r, g, bcol);
 
             int on = conn->getParameterValue(i * 6 + 1);
+            //if (!on) continue;
             float db = db_to_y(conn->getParameterValue(i * 6 + 5), db_min, db_max, height);
             float freq = freq_to_x(conn->getParameterValue(i * 6 + 4), f_min, f_max, width);
             cairo_set_source_rgba(cr, r, g, bcol, on ? 1.0 : 0.5);
@@ -2026,8 +2289,27 @@ private:
 
         draw_band_curves(cr, true, width, height);
         if (conn->getParameterValue(111)) draw_threshold_line(cr, width, height);
-        drawSpectrum(cr, magin_, width, height, db_min_, db_max_, 1.5, sample_rate, 0.2, 0.75, 0.45, "", height-100, false, true);
-        drawSpectrum(cr, mag_, width, height, db_min_, db_max_, 1.5, sample_rate, 0.45, 0.2, 0.75, "", height-100, false, true);
+        if (inVisible)
+            drawSpectrum(cr, magin_, width, height, db_min_, db_max_, 1.5, sample_rate, 0.2, 0.75, 0.45, "", height-100, false, true);
+        int p = 0;
+        instances = InstanceRegistry::instance().getInstances();
+        for (const auto& instance : instances) {
+            float r = 0.45;
+            float g = 0.2;
+            float b = 0.75;
+            uint32_t id = instance.id;
+            bool fill = id == conn->getInstanceID() ? true : false;
+            if (!fill) {
+                r = instance_shades[p].r;
+                g = instance_shades[p].g;
+                b = instance_shades[p].b;
+                
+            }
+            if (isVisible[p]) {
+                drawSpectrum(cr, mag_[p], width, height, db_min_, db_max_, 1.5, sample_rate, r, g, b, "", height-100, false, fill);
+            }
+            p++;
+        }
     }
 
     void drawSpectrum(cairo_t* cr, const Vec& mags, int width, int height, float dB_min, float dB_max,

@@ -62,10 +62,10 @@ public:
     void startGui(Window window) {
         main_init(sw.getMain());
         #if defined(_WIN32)
-        sw.top  = create_window(sw.getMain(), (HWND) window, 0, 0, 930, 430);
+        sw.top  = create_window(sw.getMain(), (HWND) window, 0, 0, 930, 460);
         sw.top->func.expose_callback = sw.draw_window;
         #else
-        sw.top  = create_window(sw.getMain(), (Window) window, 0, 0, 930, 430);
+        sw.top  = create_window(sw.getMain(), (Window) window, 0, 0, 930, 460);
         sw.top->func.expose_callback = sw.draw_window;
         #endif
         sw.top->flags |= HIDE_ON_DELETE;
@@ -77,7 +77,7 @@ public:
 
     void startGui() {
         main_init(sw.getMain());
-        sw.top  = create_window(sw.getMain(), os_get_root_window(sw.getMain(), IS_WINDOW), 0, 0, 930, 430);
+        sw.top  = create_window(sw.getMain(), os_get_root_window(sw.getMain(), IS_WINDOW), 0, 0, 930, 460);
         sw.top->func.expose_callback = sw.draw_window;
         sw.top->flags |= HIDE_ON_DELETE;
         sw.create();
@@ -259,6 +259,10 @@ public:
                     if (!buf) break;
                 }
             }
+            if (key.compare("[NAME]") == 0) {
+                uint32_t id = engine.getInstanceID();
+                InstanceRegistry::instance().registerInstanceName(id, value);
+            }
             key.clear();
             value.clear();
             stream = stream.substr(pos+1);
@@ -271,11 +275,15 @@ public:
     }
 
     void saveState(std::string *state) {
+        uint32_t id = engine.getInstanceID();
         std::ostringstream buffer; 
         buffer << "[CONTROLS] ";
         for (int i = 0; i < param->getParamCount(); i++) {
             buffer << param->getParam(i) << " ";
         }
+        buffer << "|";
+        buffer << "[NAME] ";
+        buffer << InstanceRegistry::instance().getInstanceName(id);
         buffer << "|";
         (*state) = buffer.str();
     }

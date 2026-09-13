@@ -223,8 +223,8 @@ struct toneshifteq_processor : v3_audio_processor_cpp {
 // ---------------------------------------------------------------------------
 
 struct toneshifteq_view : v3_plugin_view_cpp {
-    static constexpr int kDefaultWidth = 880;
-    static constexpr int kDefaultHeight = 430;
+    static constexpr int kDefaultWidth = 930;
+    static constexpr int kDefaultHeight = 460;
 
     std::atomic_int refcounter{1};
     ToneShiftEQ* const plugin;

@@ -1130,7 +1130,7 @@ public:
 
     void setBypass(int b) {
         bypass = b;
-        res = 1;
+        //res = 1;
     }
 
     void process(float& l,float& r) {
@@ -1139,15 +1139,15 @@ public:
     }
 
     void processBlock(uint32_t nframes, float* output, float* output1) {
-        if (bypass) {
-            if (res) reset();
-            return;
-        }
+       // if (bypass) {
+      //      if (res) reset();
+      //      return;
+      //  }
         for (uint32_t i = 0; i < nframes; i++) {
             float l = output[i], r = output1[i];
             for (auto& f : filters) f.process(l, r);
-            output[i] = l;
-            output1[i] = r;
+            output[i] = bypass ? output[i] : l;
+            output1[i] = bypass ? output1[i] : r;
          }
         
     }

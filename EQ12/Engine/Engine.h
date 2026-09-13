@@ -29,6 +29,7 @@
 #include "SVF.h"
 #include "BandDetector.h"
 
+#include "InstanceRegistry.h"
 
 class Engine : public FilterTypes {
 public:
@@ -62,15 +63,18 @@ public:
 
     inline ~Engine();
 
+    uint32_t getInstanceID();
     inline float getDynamics(int index);
     inline void init(uint32_t rate, int32_t rt_prio_, int32_t rt_policy_);
     inline void do_work_mono();
-    inline void process(uint32_t nframes, const float* input, const float* input1, float* output, float* output1);
+    inline void process(uint32_t nframes, const float* input, const float* input1,
+                                                    float* output, float* output1);
 
 private:
     ParallelThread                  par;
     float*                          abuffer = nullptr;
     uint32_t                        frames = 0;
+    uint32_t                        instanceId = 0;
     int                             zoom_step = 0; // ui parameter
     int                             mode = 0;
     int                             sidechain = 0;
@@ -102,7 +106,8 @@ private:
     inline void processBuffer();
     inline void processDynamic();
     inline void applyDynamicGains();
-    inline void feedAnanlyzer(uint32_t nframes, uint32_t proc, const float* output, const float* output1);
+    inline void feedAnanlyzer(uint32_t nframes, uint32_t proc,
+                    const float* output, const float* output1);
 };
 
 inline Engine::Engine(IRProcessor *ip_, IRMorpherStereo* conv_, FFTAnalyzer* ana_,
@@ -125,9 +130,11 @@ inline Engine::Engine(IRProcessor *ip_, IRMorpherStereo* conv_, FFTAnalyzer* ana
         registerParameters();
         xrworker.start();
         par.start();
+        instanceId = InstanceRegistry::instance().registerInstance(this);
 };
 
 inline Engine::~Engine(){
+    InstanceRegistry::instance().unregisterInstance(this);
     ana->cleanup();
     xrworker.stop();
     par.stop();
@@ -191,7 +198,6 @@ void Engine::registerParameters() {
 
 };
 
-
 inline void Engine::init(uint32_t rate, int32_t rt_prio_, int32_t rt_policy_) {
     par.stop();
     xrworker.stop();
@@ -223,11 +229,13 @@ inline void Engine::init(uint32_t rate, int32_t rt_prio_, int32_t rt_policy_) {
     par.set<1, Engine, &Engine::processBuffer>(this);
 };
 
+uint32_t Engine::getInstanceID() {
+    return instanceId;
+}
 
 inline float Engine::getDynamics(int index) {
     return dynGainOffset[index];
 }
-
 
 void Engine::updateCascadeFromParams() {
     static const Type typeMap[] = {
@@ -384,13 +392,14 @@ inline void Engine::processBuffer() {
 }
 
 inline void Engine::feedAnanlyzer(uint32_t nframes, uint32_t proc, const float* output, const float* output1) {
-    for (uint32_t i = 0; i < nframes; ++i) {
+    // if nframes is bigger then 8192, we must clip (shouldn't be the case on normal hosts)
+    frames = nframes > 8192 ? 8192 : nframes;
+    for (uint32_t i = 0; i < frames; ++i) {
         const float l = std::fabs(output[i]);
         const float r = std::fabs(output1[i]);
         abuffer[i] = (l > r) ? output[i] : output1[i];
     }
 
-    frames = nframes;
     par.setProcessor(proc);
     par.runProcess();
 }

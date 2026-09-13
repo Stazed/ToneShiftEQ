@@ -74,8 +74,8 @@ public:
         const double fSlow0 = (0.0010000000000000009 * std::pow(10.0, (0.050000000000000003 * double(gain))));
 
         for (int i = 0; i < count; ++i) {
-            processSample(0, inputL[i], outputL[i], powerL, meterL, fSlow0);
-            processSample(1, inputR[i], outputR[i], powerR, meterR, fSlow0);
+            processSample(0, inputL[i], outputL[i], powerL, fSlow0);
+            processSample(1, inputR[i], outputR[i], powerR, fSlow0);
         }
 
         meterL = 20.0f * log10(std::max<double>(0.0000003, powerL));
@@ -86,8 +86,7 @@ public:
 
 private:
 
-    void processSample(int ch, float input, float& output, double& power,
-                                        float& meter, double gainSmoothed) {
+    void processSample(int ch, float input, float& output, double& power, double gainSmoothed) {
 
         int iTemp0 = (iRec1[ch][1] < 4096);
         fRec3[ch][0] = gainSmoothed + (0.999 * fRec3[ch][1]);

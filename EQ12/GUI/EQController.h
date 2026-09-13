@@ -28,8 +28,8 @@ void adjust_eq_font_size(cairo_t* cr, double font_size, int available_width, con
     cairo_set_font_size(cr, font_size);
     cairo_text_extents(cr, label, &extents);
     
-    if (extents.width > available_width - 4) {
-        double scale = (double)(available_width - 4) / extents.width;
+    if (extents.width > available_width) {
+        double scale = (double)(available_width) / extents.width;
         font_size *= scale;
         font_size = std::max<int>(font_size, 6.0);
         cairo_set_font_size(cr, font_size);
@@ -735,6 +735,104 @@ Widget_t *add_my_mode_button(Widget_t *parent, int x, int y, int width, int heig
     fbutton->flags |= HAS_TOOLTIP;
     fbutton->func.expose_callback = draw_mode_button;
     fbutton->func.button_release_callback = fbutton_released;
+    return fbutton;
+}
+
+/****************************************************************
+ *    Instance visibility eye toggle (multi-instance spectrum view)
+****************************************************************/
+
+void draw_instance_eye_toggle(Widget_t *w, double x, double y, double size,
+                               int state, const int active) {
+    cairo_t *cr = w->crb;
+    double ac = active ? 0.5 : 0.0;
+    double pad = size * 0.18;
+    double offset = 0.0f;
+    if (state == 2) offset = 1.0f; // pressed
+
+    double cx = x + size * 0.5 + offset;
+    double cy = y + size * 0.5 + offset;
+    double rw = size * 0.5 - pad;
+    double rh = rw * 0.55;
+
+    cairo_save(cr);
+    cairo_set_line_width(cr, size * 0.08);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+
+    if (active) {
+        use_fg_color_scheme(w, NORMAL_);
+    } else {
+        cairo_set_source_rgba(cr, 0.91, 0.949 - ac, 0.838 - ac, 0.55);
+    }
+
+    cairo_move_to(cr, cx - rw, cy);
+    cairo_curve_to(cr, cx - rw * 0.5, cy - rh * 1.8,
+                       cx + rw * 0.5, cy - rh * 1.8,
+                       cx + rw, cy);
+    cairo_curve_to(cr, cx + rw * 0.5, cy + rh * 1.8,
+                       cx - rw * 0.5, cy + rh * 1.8,
+                       cx - rw, cy);
+    cairo_close_path(cr);
+    cairo_stroke(cr);
+
+    cairo_arc(cr, cx, cy, rh * 0.55, 0, 2 * M_PI);
+    cairo_fill(cr);
+
+    if (!active) {
+        cairo_move_to(cr, cx - rw * 1.15, cy - rh * 1.3);
+        cairo_line_to(cr, cx + rw * 1.15, cy + rh * 1.3);
+        cairo_stroke(cr);
+    }
+
+    cairo_restore(cr);
+}
+
+void draw_instance_eye_button(void *w_, void* user_data) {
+    Widget_t *w = (Widget_t*)w_;
+    if (!w) return;
+
+    Metrics_t metrics;
+    os_get_window_metrics(w, &metrics);
+    if (!metrics.visible) return;
+
+    const int height = metrics.height;
+    const int state  = (int)adj_get_value(w->adj); // 0 = hidden, 1 = visible
+
+    draw_instance_eye_toggle(w, 0.0, 0.0, height, w->state, state);
+
+    tooltip_set_my_text(w, state ? "Hide instance" : "Show instance");
+}
+
+Widget_t *add_instance_eye_button(Widget_t *parent, int x, int y, int width, int height) {
+    Widget_t *fbutton = add_toggle_button(parent, "", x, y, width, height);
+    fbutton->scale.gravity = ASPECT;
+    fbutton->flags |= NO_PROPAGATE | HAS_TOOLTIP;
+    fbutton->func.expose_callback = draw_instance_eye_button;
+    return fbutton;
+}
+
+void draw_input_eye_button(void *w_, void* user_data) {
+    Widget_t *w = (Widget_t*)w_;
+    if (!w) return;
+
+    Metrics_t metrics;
+    os_get_window_metrics(w, &metrics);
+    if (!metrics.visible) return;
+
+    const int height = metrics.height;
+    const int state  = (int)adj_get_value(w->adj); // 0 = hidden, 1 = visible
+
+    draw_instance_eye_toggle(w, 0.0, 0.0, height, w->state, state);
+
+    tooltip_set_my_text(w, state ? "Hide input" : "Show input");
+}
+
+Widget_t *add_input_eye_button(Widget_t *parent, int x, int y, int width, int height) {
+    Widget_t *fbutton = add_toggle_button(parent, "", x, y, width, height);
+    fbutton->scale.gravity = ASPECT;
+    fbutton->flags |= NO_PROPAGATE | HAS_TOOLTIP;
+    fbutton->func.expose_callback = draw_input_eye_button;
     return fbutton;
 }
 

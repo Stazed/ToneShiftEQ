@@ -23,6 +23,9 @@ class IConnector {
 public:
     virtual ~IConnector() {}
 
+    virtual uint32_t getInstanceID() = 0;
+    virtual void setInstance(void* ptr) = 0;
+
     virtual void sendValueChanged(int index, float value) = 0;
     virtual float getParameterValue(int index) = 0;
     virtual void setParValue(int index, float value) = 0;
@@ -39,6 +42,11 @@ public:
     virtual int getBins() = 0;
     virtual const float* getMagnitudes() = 0;
     virtual void clearAna() = 0;
+
+    virtual bool checkNewData(void* ptr) = 0;
+    virtual int getBins(void* ptr) = 0;
+    virtual const float* getMagnitudes(void* ptr) = 0;
+    virtual void clearAna(void* ptr) = 0;
 
     virtual bool checkNewInData() = 0;
     virtual int getInBins() = 0;

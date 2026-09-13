@@ -24,6 +24,7 @@
 #include <atomic>
 #include <cstring>
 
+
 class FFTAnalyzer {
 public:
     FFTAnalyzer() = default;
@@ -187,6 +188,35 @@ private:
     void build_hann(float* w, int N) {
         for (int i = 0; i < N; ++i) {
             w[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / (N - 1)));
+        }
+    }
+
+    void build_hamming_window(float *w, int N) {
+        for (int i = 0; i < N; ++i) {
+            w[i] = 0.54 - 0.46 * cosf(2.0 * M_PI * i / (N - 1));
+        }
+    }
+
+    void build_blackman_harris(float* w, int N) {
+        const float a0 = 0.35875f;
+        const float a1 = 0.48829f;
+        const float a2 = 0.14128f;
+        const float a3 = 0.01168f;
+
+        for (int i = 0; i < N; ++i) {
+            float arg = (2.0f * (float)M_PI * i) / (N - 1);
+            w[i] = a0 - a1 * cosf(arg) + a2 * cosf(2.0f * arg) - a3 * cosf(3.0f * arg);
+        }
+    }
+
+    void build_blackman_harris_3_term(float* w, int N) {
+        const float a0 = 0.4243801;
+        const float a1 = 0.4973406;
+        const float a2 = 0.0782793;
+        for (int i = 0; i < N; ++i) {
+            float angle1 = (2.0 * M_PI * i) / (N - 1);
+            float angle2 = (4.0 * M_PI * i) / (N - 1);
+            w[i] = a0 - a1 * cosf(angle1) + a2 * cosf(angle2);
         }
     }
 
