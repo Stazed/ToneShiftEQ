@@ -165,7 +165,7 @@ private:
                 return;
             }
             if(status){
-                entry_add_text(w, buf);
+                if (strlen( w->input_label) < 12) entry_add_text(w, buf);
             }
         }
         os_expose_widget(w);

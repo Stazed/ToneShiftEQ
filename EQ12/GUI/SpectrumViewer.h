@@ -662,6 +662,7 @@ private:
     int match_band = -1;
     int selected_band = -1;
     int mx = 0;
+    int mx_offset = 0;
     int my = 0;
     int bin[12] = {0};
     int spec_width  = 0;
@@ -1313,6 +1314,14 @@ private:
             if(xbutton->button == Button1) {
                 self->mx = xbutton->x;
                 self->my = xbutton->y;
+                if (self->band_match) {
+                    Metrics_t m;
+                    os_get_window_metrics(w, &m);
+                    const int width  = m.width;
+                    float v = adj_get_value(self->freq[self->match_band]->adj);
+                    float dot_x = freq_to_x(v, self->f_min, self->f_max, width);
+                    self->mx_offset = dot_x - self->mx;
+                }
             } else if(xbutton->button == Button3) {
                 if (self->band_match) {
                     int v = (int)adj_get_value(self->fenable[self->match_band]->adj);
@@ -1455,9 +1464,7 @@ private:
                     adj_set_value(self->threshold[self->match_band]->adj, vg);
 
                 } else {
-                    float v = adj_get_value(self->freq[self->match_band]->adj);
-                    float deltaX = (float)x1 - self->mx;
-                    v *= std::pow(2.0, deltaX * 0.005);
+                    float v =  x_to_freq(x1 - self->mx_offset, self->f_min, self->f_max, width);
                     self->mx = x1;
                     adj_set_value(self->freq[self->match_band]->adj, v);
 
