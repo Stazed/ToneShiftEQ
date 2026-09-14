@@ -743,7 +743,8 @@ private:
             instanceVisible[p] = add_instance_eye_button(topframe, x - 20, 4, 20, 20);
             instanceVisible[p]->parent_struct = this;
             instanceVisible[p]->data = p;
-            set_widget_color(instanceVisible[p], (Color_state)0, (Color_mod)0, instance_shades[p].r, instance_shades[p].g, instance_shades[p].b, 1.0);
+            set_widget_color(instanceVisible[p], (Color_state)0, (Color_mod)0,
+                instance_shades[p].r, instance_shades[p].g, instance_shades[p].b, 1.0);
             adj_set_value(instanceVisible[p]->adj, (float)isVisible[p]);
             instanceVisible[p]->func.value_changed_callback = instance_visible;
 

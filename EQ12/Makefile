@@ -64,7 +64,7 @@ endif
 	# set bundle name
 	NAME = toneshifteq
 	VST3_NAME = Toneshifteq
-	VER = 0.8.0
+	VER = 1.0.0
 
 	PREFIX ?= /usr
 	# check if user is root
@@ -112,7 +112,7 @@ ifeq ($(TARGET), Linux)
 	# set compile flags
 	GUI_LDFLAGS += -I$(HEADER_DIR) -Wl,-Bstatic -L. $(UI_LIB) \
 	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
-	-Wl,-Bdynamic `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11` $(FT_LIBS)
+	-Wl,-Bdynamic `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11`
 
 	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile fftw3 `\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
@@ -143,7 +143,7 @@ else ifeq ($(TARGET), Windows)
 
 	GUI_LDFLAGS += -I$(HEADER_DIR) -static-libgcc -static-libstdc++ \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo ` \
-	-L. $(UI_LIB) -lm $(PAWPAW_LFLAGS)  $(FT_LIBS)
+	-L. $(UI_LIB) -lm $(PAWPAW_LFLAGS)
 
 	CFLAGS := -Wall -fstack-protector -fvisibility=hidden \
 	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
@@ -173,13 +173,13 @@ ifneq ($(TARGET), Windows)
 	@if ! [ -f ../bin/$(NAME)$(EXE) ]; then \
 		$(R_ECHO) "Sorry, build fail$(reset)"; \
 	fi
-	@$(B_ECHO) "=================== DONE =======================$(reset)"
+	@$(B_ECHO) "============== Standalone DONE =================$(reset)"
 endif
 
 clap: $(NAME).clap
 	$(QUIET)mkdir -p ../bin/
 	$(QUIET)cp ./$(NAME).clap ../bin/
-	@$(B_ECHO) "=================== DONE =======================$(reset)"
+	@$(B_ECHO) "================ Clap DONE =====================$(reset)"
 
 lv2: $(NAME).$(LIB_EXT) $(NAME)_ui.$(LIB_EXT)
 ifneq ($(TARGET), Windows)
@@ -193,7 +193,7 @@ ifneq ($(TARGET), Windows)
 	@if ! [ -f ../bin/$(BUNDLE)/$(NAME).$(LIB_EXT) ]; then \
 		$(R_ECHO) "Sorry, build fail$(reset)"; \
 	fi
-	@$(B_ECHO) "=================== DONE =======================$(reset)"
+	@$(B_ECHO) "================= LV2 DONE =====================$(reset)"
 endif
 
 vst3: $(VST3_NAME)
@@ -205,7 +205,7 @@ ifeq ($(TARGET), Windows)
 else
 	$(QUIET)cp ./$(VST3_NAME).$(LIB_EXT) ../bin/$(VST3_BUNDLE)
 endif
-	@$(B_ECHO) "=================== DONE =======================$(reset)"
+	@$(B_ECHO) "================ VST3 DONE =====================$(reset)"
 
 debug : all
 

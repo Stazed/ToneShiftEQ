@@ -547,8 +547,8 @@ struct toneshifteq_component : v3_component_cpp {
         comp.get_routing_info        = get_routing_info;
         comp.activate_bus            = activate_bus;
         comp.set_active              = set_active;
-        comp.set_state                = component_set_state;
-        comp.get_state                = component_get_state;
+        comp.set_state               = component_set_state;
+        comp.get_state               = component_get_state;
     }
 
     ~toneshifteq_component() {

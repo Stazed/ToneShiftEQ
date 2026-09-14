@@ -507,7 +507,7 @@ static const clap_plugin_descriptor_t toneshifteq_live_descriptor = {
     .url = "https://github.com/brummer10/ToneShiftEQ",
     .manual_url = "https://github.com/brummer10/ToneShiftEQ",
     .support_url = "https://github.com/brummer10/ToneShiftEQ",
-    .version = "0.9.0",
+    .version = "1.0.0",
     .description = "12 band Biquad EQ (0 sampels latency)",
     .features = toneshifteq_features,
 };

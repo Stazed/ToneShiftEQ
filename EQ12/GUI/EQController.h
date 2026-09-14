@@ -16,6 +16,42 @@ extern "C" {
 
 
 /****************************************************************
+ *    brushed texture
+****************************************************************/
+
+static void create_brushed_texture(Widget_t* wid, int w, int h) {
+    wid->image = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+    cairo_t* cr = cairo_create(wid->image);
+
+    cairo_pattern_t* base = cairo_pattern_create_linear(0, 0, 0, h);
+    cairo_pattern_add_color_stop_rgb(base, 0.0,  0.10, 0.10, 0.105);
+    cairo_pattern_add_color_stop_rgb(base, 0.45, 0.15, 0.15, 0.155);
+    cairo_pattern_add_color_stop_rgb(base, 0.55, 0.15, 0.15, 0.155);
+    cairo_pattern_add_color_stop_rgb(base, 1.0,  0.07, 0.07, 0.075);
+    cairo_set_source(cr, base);
+    cairo_paint(cr);
+    cairo_pattern_destroy(base);
+
+    cairo_pattern_t* glare = cairo_pattern_create_linear(0, 0, w, h);
+    cairo_pattern_add_color_stop_rgba(glare, 0.0,  1,1,1, 0.0);
+    cairo_pattern_add_color_stop_rgba(glare, 0.35, 1,1,1, 0.035);
+    cairo_pattern_add_color_stop_rgba(glare, 0.5,  1,1,1, 0.0);
+    cairo_pattern_add_color_stop_rgba(glare, 1.0,  1,1,1, 0.0);
+    cairo_set_source(cr, glare);
+    cairo_paint(cr);
+    cairo_pattern_destroy(glare);
+
+    cairo_pattern_t* vig = cairo_pattern_create_radial(w*0.5, h*0.5, h*0.2, w*0.5, h*0.5, h*0.75);
+    cairo_pattern_add_color_stop_rgba(vig, 0.0, 0,0,0, 0.0);
+    cairo_pattern_add_color_stop_rgba(vig, 1.0, 0,0,0, 0.35);
+    cairo_set_source(cr, vig);
+    cairo_paint(cr);
+    cairo_pattern_destroy(vig);
+    cairo_destroy(cr);
+
+}
+
+/****************************************************************
  *    helpers
 ****************************************************************/
 
@@ -339,16 +375,28 @@ static void roundrec(cairo_t *cr, float x, float y, float width, float height, f
 
 static void draw_frame(void *w_, void* user_data) {
     Widget_t *w = (Widget_t*)w_;
+
     Metrics_t metrics;
     os_get_window_metrics(w, &metrics);
     if (!metrics.visible) return;
     int width_t = metrics.width;
     int height_t = metrics.height;
 
+    if (!w->image) create_brushed_texture(w, width_t, height_t);
+    int width = cairo_image_surface_get_width(w->image);
+    int height = cairo_image_surface_get_height(w->image);
+    if (height != height_t || width != width_t) {
+        cairo_surface_destroy(w->image);
+        w->image = NULL;
+        create_brushed_texture(w, width_t, height_t);
+    }
+
     cairo_set_line_width(w->crb,2);
-    cairo_set_source_rgba(w->crb, 0.15,0.15,0.17,1.0);
+    //cairo_set_source_rgba(w->crb, 0.15,0.15,0.17,1.0);
     roundrec(w->crb, 1, 0, width_t-2, height_t, 5);
-    cairo_fill_preserve(w->crb);
+    //cairo_fill_preserve(w->crb);
+    cairo_set_source_surface(w->crb, w->image, 0, 0);
+    cairo_fill_preserve (w->crb);
 
     setFrameColour(w, w->crb, 5, 5, width_t-10, height_t-10);
     cairo_stroke(w->crb);
@@ -374,16 +422,28 @@ Widget_t* add_my_frame(Widget_t *parent, const char * label,
 
 static void draw_z_frame(void *w_, void* user_data) {
     Widget_t *w = (Widget_t*)w_;
+
     Metrics_t metrics;
     os_get_window_metrics(w, &metrics);
     if (!metrics.visible) return;
     int width_t = metrics.width;
     int height_t = metrics.height;
 
+    if (!w->image) create_brushed_texture(w, width_t, height_t);
+    int width = cairo_image_surface_get_width(w->image);
+    int height = cairo_image_surface_get_height(w->image);
+    if (height != height_t || width != width_t) {
+        cairo_surface_destroy(w->image);
+        w->image = NULL;
+        create_brushed_texture(w, width_t, height_t);
+    }
+
     cairo_set_line_width(w->crb,2);
-    cairo_set_source_rgba(w->crb, 0.15,0.15,0.17,1.0);
+    //cairo_set_source_rgba(w->crb, 0.15,0.15,0.17,1.0);
     roundrec(w->crb, 1, 20 * w->app->hdpi, width_t-2, height_t- (20 * w->app->hdpi), 5);
-    cairo_fill_preserve(w->crb);
+    //cairo_fill_preserve(w->crb);
+    cairo_set_source_surface(w->crb, w->image, 0, 0);
+    cairo_fill_preserve (w->crb);
 
     setFrameColour(w, w->crb, 5, 25, width_t-10, height_t-30);
     cairo_stroke(w->crb);
@@ -739,7 +799,7 @@ Widget_t *add_my_mode_button(Widget_t *parent, int x, int y, int width, int heig
 }
 
 /****************************************************************
- *    Instance visibility eye toggle (multi-instance spectrum view)
+ *    Instance/Input visibility eye toggle (multi-instance spectrum view)
 ****************************************************************/
 
 void draw_instance_eye_toggle(Widget_t *w, double x, double y, double size,
