@@ -54,14 +54,33 @@ Biquad Mode
 
 ---
 
+## Multi-instance view
+
+* Multi-instance spectrum view
+* One ToneShiftEQ GUI can display spectra from other instances of the same plugin framework
+* One instance is the active/editable instance
+* Other instances are shown as output spectra
+* Instance selector bar
+* Per-instance visibility toggle via eye icons
+* Individual instance identification through instance name and the selector/spectrum colors
+* Up to 12 instances
+* Works independently for CLAP and VST3 instances ( didn't work for LV2 instances)
+
+---
+
 ## Usage
 
 Band control points can be moved with the mouse to adjust frequency and gain.
 Use the mouse wheel over a control point to change the Q factor.
 
+Right click on a band control point to en/dis-able a Band.
+Right click in the spectrum view to jump next band control point to the position.
+
 Hold Ctrl and drag the left mouse button across the spectrum display to draw
 a gain curve directly. ToneShiftEQ automatically selects the nearest band
 for each position.
+
+Mouse wheel in spectrum display to resize the gain axis.
 
 ToneShiftEQ can also import impulse responses by approximating them with its
 internal 12-band parametric EQ, allowing further manual refinement.
@@ -129,6 +148,7 @@ ToneShiftEQ relies on a small set of widely available libraries:
 * **libsndfile** – audio I/O
 * **FFTW3** – spectral processing
 * **jackd** – Stand-alone real-time audio
+* **lv2-dev** – is needed when build the LV2 plugin
 
 ### Install (Debian/Ubuntu)
 
