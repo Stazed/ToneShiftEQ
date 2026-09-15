@@ -493,7 +493,7 @@ static const clap_plugin_descriptor_t toneshifteq_master_descriptor = {
     .url = "https://github.com/brummer10/ToneShiftEQ",
     .manual_url = "https://github.com/brummer10/ToneShiftEQ",
     .support_url = "https://github.com/brummer10/ToneShiftEQ",
-    .version = "0.9.0",
+    .version = "1.1.0",
     .description = "12 band minum phase EQ (128 samples latency)",
     .features = toneshifteq_features,
 };
@@ -507,7 +507,7 @@ static const clap_plugin_descriptor_t toneshifteq_live_descriptor = {
     .url = "https://github.com/brummer10/ToneShiftEQ",
     .manual_url = "https://github.com/brummer10/ToneShiftEQ",
     .support_url = "https://github.com/brummer10/ToneShiftEQ",
-    .version = "1.0.0",
+    .version = "1.1.0",
     .description = "12 band Biquad EQ (0 sampels latency)",
     .features = toneshifteq_features,
 };
@@ -593,6 +593,11 @@ static const clap_plugin_factory_t plugin_factory = {
 };
 
 static const void *entry_get_factory(const char *factory_id) {
+    if (!factory_id) return nullptr;
+
+    if (strcmp(factory_id, CLAP_PRESET_DISCOVERY_FACTORY_ID) == 0)
+        return nullptr;
+
     return &plugin_factory;
 }
 

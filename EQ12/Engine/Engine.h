@@ -285,6 +285,8 @@ void Engine::updateCascadeFromParams() {
     tsc.setHighCut((float)ip->highcut, ip->solo_enabled ? false : ip->highcut_enabled);
     svf.setLowCut((float)ip->lowcut, ip->solo_enabled ? false : ip->lowcut_enabled);
     svf.setHighCut((float)ip->highcut, ip->solo_enabled ? false : ip->highcut_enabled);
+    applyDynamicGains();
+    com.reset();
 }
 
 void Engine::do_work_mono() {

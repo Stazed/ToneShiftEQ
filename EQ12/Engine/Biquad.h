@@ -1050,8 +1050,8 @@ public:
 
 private:
     double sr = 44100.0;
-    float t0 = 1.0f, t1 = 0.0f, t2 = 0.0f, e = 1.0f, f = 0.0f;
-    float tt0 = 1.0f, tt1 = 0.0f, tt2 = 0.0f, te = 1.0f, tf = 0.0f;
+    float t0 = 1.0f, t1 = 0.0f, t2 = 1.0f, e = 1.0f, f = 0.0f;
+    float tt0 = 1.0f, tt1 = 0.0f, tt2 = 1.0f, te = 1.0f, tf = 0.0f;
     float smoothCoeff = 0.05f;
 
     float z1 = 0.0f, z2 = 0.0f;

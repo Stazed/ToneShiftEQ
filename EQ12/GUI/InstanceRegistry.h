@@ -50,6 +50,7 @@ public:
     }
 
     void registerInstanceName(InstanceID id, std::string instanceName) {
+        std::lock_guard<std::mutex> lock(mutex_);
         for (auto& instance : instances_) {
             if (instance.id == id) {
                 instance.name = instanceName;
@@ -77,10 +78,12 @@ public:
     }
 
     uint32_t instanceCount() {
+        std::lock_guard<std::mutex> lock(mutex_);
         return instances_.size();
     }
 
     void* getInstanceByID(InstanceID id) {
+        std::lock_guard<std::mutex> lock(mutex_);
         for (const auto& instance : instances_) {
             if (instance.id == id)
                 return instance.ptr;
@@ -89,6 +92,7 @@ public:
     }
 
     const std::string getInstanceName(InstanceID id) {
+        std::lock_guard<std::mutex> lock(mutex_);
         for (const auto& instance : instances_) {
             if (instance.id == id)
                 return instance.name;
