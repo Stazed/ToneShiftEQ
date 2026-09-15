@@ -176,11 +176,11 @@ public:
 
         Widget_t* ginframe = add_my_frame(top,"", 1, 30, 64, height-112);
         ginframe->scale.gravity = EASTNORTH;
-        vuinmeterL = add_my_left_vmeter(ginframe, "Meter", true, 3, 5, 10, height-88);
+        vuinmeterL = add_my_left_vmeter(ginframe, "Meter", true, 3, 5, 10, height-120);
         vuinmeterL->scale.gravity = WESTSOUTH;
-        vuinmeterR = add_my_vmeter(ginframe, "Meter", false, 28, 5, 10, height-88);
+        vuinmeterR = add_my_vmeter(ginframe, "Meter", false, 28, 5, 10, height-120);
         vuinmeterR->scale.gravity = WESTSOUTH;
-        vuing = add_my_vslider(ginframe, "Gain", 40, 6, 20, height-90);
+        vuing = add_my_vslider(ginframe, "Gain", 40, 6, 20, height-120);
         vuing->scale.gravity = WESTSOUTH;
         vuing->parent_struct = this;
         set_adjustment(vuing->adj,0.0, 0.0, -46.0, 12.0, 0.1, CL_CONTINUOS);
@@ -204,11 +204,11 @@ public:
 
         Widget_t* gframe = add_my_frame(top,"", width-65, 30, 64, height-112);
         gframe->scale.gravity = WESTSOUTH;
-        vumeterL = add_my_vmeter(gframe, "Meter", false, 25, 5, 10, height-88);
+        vumeterL = add_my_vmeter(gframe, "Meter", false, 25, 5, 10, height-120);
         vumeterL->scale.gravity = WESTSOUTH;
-        vumeterR = add_my_vmeter(gframe, "Meter", true, 35, 5, 10, height-88);
+        vumeterR = add_my_vmeter(gframe, "Meter", true, 35, 5, 10, height-120);
         vumeterR->scale.gravity = WESTSOUTH;
-        vug = add_my_vslider(gframe, "Gain", 3, 6, 20, height-90);
+        vug = add_my_vslider(gframe, "Gain", 3, 6, 20, height-120);
         vug->scale.gravity = WESTSOUTH;
         vug->parent_struct = this;
         set_adjustment(vug->adj,0.0, 0.0, -46.0, 12.0, 0.1, CL_CONTINUOS);

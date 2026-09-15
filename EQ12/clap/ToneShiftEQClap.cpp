@@ -289,6 +289,7 @@ static bool toneshifteq_gui_adjust_size(const clap_plugin_t *plugin, uint32_t *w
     toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
     plug->width = *width;
     plug->height = *height;
+    os_resize_window(plug->r->getMain()->dpy, plug->r->sw.top, *width, *height);
     return true;   
 }
 
