@@ -265,10 +265,7 @@ static bool toneshifteq_gui_get_preferred_api(const clap_plugin_t *plugin, const
 }
 
 static bool toneshifteq_gui_set_scale(const clap_plugin_t *plugin, double scale) {
-    toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
-    // only support host scale when no system scale is set
-    if (plug->r->getMain()->hdpi == 1.0f)
-        plug->r->getMain()->hdpi = (float)scale;
+    // the GUI scale anyway to any given size, so nothing to do here.
     return true;
 }
 
