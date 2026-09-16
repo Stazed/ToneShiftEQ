@@ -266,7 +266,9 @@ static bool toneshifteq_gui_get_preferred_api(const clap_plugin_t *plugin, const
 
 static bool toneshifteq_gui_set_scale(const clap_plugin_t *plugin, double scale) {
     toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
-    plug->r->getMain()->hdpi = scale;
+    // only support host scale when no system scale is set
+    if (plug->r->getMain()->hdpi == 1.0f)
+        plug->r->getMain()->hdpi = (float)scale;
     return true;
 }
 
@@ -289,7 +291,6 @@ static bool toneshifteq_gui_adjust_size(const clap_plugin_t *plugin, uint32_t *w
     toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
     plug->width = *width;
     plug->height = *height;
-    os_resize_window(plug->r->getMain()->dpy, plug->r->sw.top, *width, *height);
     return true;   
 }
 
@@ -596,10 +597,10 @@ static const clap_plugin_factory_t plugin_factory = {
 static const void *entry_get_factory(const char *factory_id) {
     if (!factory_id) return nullptr;
 
-    if (strcmp(factory_id, CLAP_PRESET_DISCOVERY_FACTORY_ID) == 0)
-        return nullptr;
+    if (strcmp(factory_id, CLAP_PLUGIN_FACTORY_ID) == 0)
+        return &plugin_factory;
 
-    return &plugin_factory;
+    return nullptr;
 }
 
 static bool entry_init(const char *plugin_path) {
