@@ -1,0 +1,13 @@
+EQ12/Toneshifteq.so
+EQ12/pffft/pffft.d
+EQ12/pffft/pffft.o
+EQ12/toneshifteq
+EQ12/toneshifteq.clap
+EQ12/toneshifteq.so
+EQ12/toneshifteq_app.d
+EQ12/toneshifteq_clap.d
+EQ12/toneshifteq_lv2.d
+EQ12/toneshifteq_ui.d
+EQ12/toneshifteq_ui.so
+EQ12/toneshifteq_vst3.d
+bin/
