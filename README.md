@@ -187,6 +187,11 @@ ToneShiftEQ relies on a small set of widely available libraries:
 
 ---
 
+## For pffft support
+
+    checkout the pffft branch
+    make PFFFT_SUPPORT=1
+
 ## License
 
 BSD-3-Clause
