@@ -1,4 +1,5 @@
 
+	PFFFT_SUPPORT ?= 0
 	STRIP ?= strip
 
 	# check on which OS we build
@@ -86,7 +87,15 @@ endif
 	PIXMAPS_DIR ?= $(SHARE_DIR)/pixmaps
 	PKGCONFIG = pkg-config
 
+ifeq ($(PFFFT_SUPPORT),1)
+	INCLUDES := -I.. -I./Convolver -I./Engine -I./FileIO -I./GUI -I./IRMatch -I./pffft
+	PFFFT_OBJ := pffft/pffft.o
+	PFFFT_DEP := pffft/pffft.d
+	CFLAGS += -DPFFFT_SUPPORT
+    OBJECTS += $(PFFFT_OBJ)
+else
 	INCLUDES := -I.. -I./Convolver -I./Engine -I./FileIO -I./GUI -I./IRMatch
+endif
 	LIB_DIR := ../libxputty/libxputty/
 	HEADER_DIR := $(LIB_DIR)include/
 	UI_LIB:= $(LIB_DIR)libxputty.$(STATIC_LIB_EXT)
@@ -114,17 +123,27 @@ ifeq ($(TARGET), Linux)
 	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
 	-Wl,-Bdynamic `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11`
 
+ifeq ($(PFFFT_SUPPORT),1)
+	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile `\
+	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
+	-pthread $(SSE_CFLAGS)
+else
 	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile fftw3 `\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
-
+endif
 	S_CFLAGS = `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags jack `
 
 	CXXFLAGS += -MMD -std=c++17 -fno-math-errno -fno-trapping-math -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS) \
 	-fvisibility=hidden -fvisibility-inlines-hidden
 
+ifeq ($(PFFFT_SUPPORT),1)
+	LDFLAGS += $(INCLUDES) -lm -pthread -lpthread -lstdc++ $(GUI_LDFLAGS) \
+	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(BACKEND) `
+else
 	LDFLAGS += $(INCLUDES) -lm -pthread -lpthread -lstdc++ $(GUI_LDFLAGS) \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile fftw3 fftw3f $(BACKEND) `
+endif
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
 	endif
@@ -138,17 +157,27 @@ ifeq ($(TARGET), Linux)
 else ifeq ($(TARGET), Windows)
 	VST3_BUNDLE := $(VST3_NAME).vst3/Contents/$(UNAME_M)-win/
 
+ifeq ($(PFFFT_SUPPORT),1)
+	LDFLAGS += $(INCLUDES) -I. -shared -lm $(PAWPAW_LFLAGS) -Wl,--gc-sections \
+	-Wl,--exclude-libs,ALL `$(PKGCONFIG) --libs --libs sndfile`
+else
 	LDFLAGS += $(INCLUDES) -I. -shared -lm $(PAWPAW_LFLAGS) -Wl,--gc-sections \
 	-Wl,--exclude-libs,ALL `$(PKGCONFIG) --libs --libs sndfile fftw3 fftw3f`
+endif
 
 	GUI_LDFLAGS += -I$(HEADER_DIR) -static-libgcc -static-libstdc++ \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo ` \
 	-L. $(UI_LIB) -lm $(PAWPAW_LFLAGS)
 
+ifeq ($(PFFFT_SUPPORT),1)
+	CFLAGS := -Wall -fstack-protector -fvisibility=hidden \
+	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
+	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile `
+else
 	CFLAGS := -Wall -fstack-protector -fvisibility=hidden \
 	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile fftw3 `
-
+endif
 	CXXFLAGS += -MMD -std=c++17 -fno-math-errno -fno-trapping-math -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
 	TTLUPDATE = sed -i '/lv2:binary/ s/\.so/\.dll/ ' ../bin/$(BUNDLE)/manifest.ttl
@@ -157,9 +186,13 @@ else ifeq ($(TARGET), Windows)
 endif
 
 	# invoke build files
-	OBJECTS = main.cpp
+	OBJECTS += main.cpp
 
+ifeq ($(PFFFT_SUPPORT),1)
+	DEPS = $(NAME)_app.d $(NAME)_lv2.d $(NAME)_clap.d $(NAME).d $(NAME)_ui.d $(NAME)_vst3.d $(PFFFT_DEP)
+else
 	DEPS = $(NAME)_app.d $(NAME)_lv2.d $(NAME)_clap.d $(NAME).d $(NAME)_ui.d $(NAME)_vst3.d
+endif
 
 .PHONY : all clap lv2 standalone vst3
 
@@ -224,6 +257,9 @@ info:
 
 clean :
 	$(QUIET)rm -f *.o *.d *.a *.lib *.clap *.so *.dll
+ifeq ($(PFFFT_SUPPORT),1)
+	$(QUIET)rm -f pffft/*.o pffft/*.d
+endif
 	$(QUIET)rm -f $(NAME) $(NAME).exe 
 	$(QUIET)rm -rf ../bin
 
@@ -285,9 +321,19 @@ ifneq ($(MAKECMDGOALS),debug)
 endif
 endif
 
+ifeq ($(PFFFT_SUPPORT),1)
+$(PFFFT_OBJ): pffft/pffft.c pffft/pffft.h
+	@$(B_ECHO) "Compiling PFFFT $(reset)"
+	$(QUIET)$(CC) $(CFLAGS) -I./pffft -MMD -MP -MF $(PFFFT_DEP) -c $< -o $@
+endif
+
 $(NAME).clap: $(CLAP_SOURCES) $(CLAP_DIR)ToneShiftEQ.cc
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
+ifeq ($(PFFFT_SUPPORT),1)
+	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_clap.d $(CXXFLAGS) $(CLAP_INCLUDE) $(CLAP_SOURCES) $(PFFFT_OBJ) -o $(NAME).clap  $(LDFLAGS) $(GUI_LDFLAGS)
+else
 	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_clap.d $(CXXFLAGS) $(CLAP_INCLUDE) $(CLAP_SOURCES) -o $(NAME).clap  $(LDFLAGS) $(GUI_LDFLAGS)
+endif
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
 endif
@@ -295,7 +341,11 @@ endif
 $(NAME)_ui.$(LIB_EXT): $(LV2_GUI).cpp $(UI_LIB)
 ifneq ($(TARGET), Windows)
 	@$(B_ECHO) "Compiling $(NAME)_ui.$(LIB_EXT) $(reset)"
+ifeq ($(PFFFT_SUPPORT),1)
+	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_ui.d $(CXXFLAGS) -I./ $(LV2_INCLUDE) $(LV2_GUI).cpp $(PFFFT_OBJ) -L. $(UI_LIB) -o $@ $(LDFLAGS) $(GUI_LDFLAGS)
+else
 	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_ui.d $(CXXFLAGS) -I./ $(LV2_INCLUDE) $(LV2_GUI).cpp -L. $(UI_LIB) -o $@ $(LDFLAGS) $(GUI_LDFLAGS)
+endif
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME)_ui.$(LIB_EXT)
 endif
@@ -306,7 +356,11 @@ ifeq ($(TARGET), Windows)
 	@$(B_ECHO) "LV2 not supported under Windows $(reset)"
 else
 	@$(B_ECHO) "Compiling $(NAME).$(LIB_EXT) $(reset)"
+ifeq ($(PFFFT_SUPPORT),1)
+	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_lv2.d $(CXXFLAGS) $(LV2_INCLUDE) $(LV2_PLUGIN).cpp $(PFFFT_OBJ) -o $(NAME).$(LIB_EXT) $(LDFLAGS)
+else
 	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_lv2.d $(CXXFLAGS) $(LV2_INCLUDE) $(LV2_PLUGIN).cpp -o $(NAME).$(LIB_EXT) $(LDFLAGS)
+endif
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).$(LIB_EXT)
 endif
@@ -314,7 +368,11 @@ endif
 
 $(VST3_NAME): $(VST3_SOURCES)
 	@$(B_ECHO) "Compiling $(VST3_NAME).$(LIB_EXT) $(reset)"
+ifeq ($(PFFFT_SUPPORT),1)
+	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_vst3.d $(CXXFLAGS) $(VST3_INCLUDE) $(VST3_SOURCES) $(PFFFT_OBJ) -o $(VST3_NAME).$(LIB_EXT)  $(LDFLAGS) $(GUI_LDFLAGS)
+else
 	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_vst3.d $(CXXFLAGS) $(VST3_INCLUDE) $(VST3_SOURCES) -o $(VST3_NAME).$(LIB_EXT)  $(LDFLAGS) $(GUI_LDFLAGS)
+endif
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(VST3_NAME).$(LIB_EXT)
 endif
