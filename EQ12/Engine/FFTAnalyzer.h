@@ -19,7 +19,12 @@
 
 #pragma once
 
+#ifdef PFFFT_SUPPORT
+#include "../pffft/pffft.h"
+#include <stdexcept>
+#else
 #include <fftw3.h>
+#endif
 #include <cmath>
 #include <atomic>
 #include <cstring>
@@ -47,9 +52,32 @@ public:
         write_index = 0;
         read_index  = 1;
         buffer_ready.store(false, std::memory_order_relaxed);
+#ifdef PFFFT_SUPPORT
+        setup = pffft_new_setup(N, PFFFT_REAL);
+        if (!setup)
+            throw std::invalid_argument(
+                "FFT size is not supported by PFFFT");
 
+        // PFFFT requires SIMD-compatible alignment for transform buffers.
+        // For a real transform, both buffers contain N floats.
+        in = static_cast<float*>(
+            pffft_aligned_malloc(sizeof(float) * N));
+        out = static_cast<float*>(
+            pffft_aligned_malloc(sizeof(float) * N));
+
+        if (!in || !out) {
+            pffft_aligned_free(in);
+            pffft_aligned_free(out);
+            in = nullptr;
+            out = nullptr;
+            pffft_destroy_setup(setup);
+            setup = nullptr;
+            throw std::bad_alloc();
+        }
+#else
         in     = (float*)fftwf_malloc(sizeof(float) * N);
         out    = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * (bins + 1));
+#endif
         window = new float[N];
         fifo   = new float[N]();
         smooth = new float[bins];
@@ -70,8 +98,10 @@ public:
 
         float window_gain = compute_window_gain(window, N);
         norm_factor = (2.0f / (N * window_gain));
-        plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
 
+#ifndef PFFFT_SUPPORT
+        plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+#endif
         for (int i = 0; i < bins; ++i) smooth[i] = -90.0f;
 
         attack  = 0.6f;
@@ -139,17 +169,30 @@ public:
 
     void cleanup() {
         if (!initialized) return;
-
+#ifdef PFFFT_SUPPORT
+        pffft_aligned_free(in);
+        pffft_aligned_free(out);
+        pffft_destroy_setup(setup);
+#else
         fftwf_destroy_plan(plan);
         fftwf_free(in);
         fftwf_free(out);
-
+#endif
         delete[] window;
         delete[] fifo;
         delete[] smooth;
         delete[] mags[0];
         delete[] mags[1];
-
+#ifdef PFFFT_SUPPORT
+        in = nullptr;
+        out = nullptr;
+        setup = nullptr;
+        window = nullptr;
+        fifo = nullptr;
+        smooth = nullptr;
+        mags[0] = nullptr;
+        mags[1] = nullptr;
+#endif
         initialized = false;
     }
 
@@ -162,9 +205,13 @@ private:
     float* window = nullptr;
     float* fifo = nullptr;
     float* smooth = nullptr;
+#ifdef PFFFT_SUPPORT
+    float* out = nullptr;
+    PFFFT_Setup* setup = nullptr;
+#else
     fftwf_complex* out = nullptr;
     fftwf_plan plan = nullptr;
-
+#endif
     float* mags[2] = {nullptr, nullptr};
 
     int write_index = 0;
@@ -238,15 +285,43 @@ private:
             if (idx >= N)
                 idx = 0;
         }
-
+#ifdef PFFFT_SUPPORT
+        // The ordered real-transform layout is:
+        //
+        //   out[0]       = DC real component
+        //   out[1]       = Nyquist real component
+        //   out[2*k]     = real component of bin k
+        //   out[2*k + 1] = imaginary component of bin k
+        //
+        // Only bins [0, N / 2) are processed, matching the original
+        // FFTW implementation.
+        pffft_transform_ordered(
+            setup,
+            in,
+            out,
+            nullptr,
+            PFFFT_FORWARD);
+#else
         fftwf_execute(plan);
-
+#endif
         float* write_buf = mags[write_index];
 
         for (int k = 0; k < bins; ++k) {
+#ifdef PFFFT_SUPPORT
+            float re;
+            float im;
+
+            if (k == 0) {
+                re = out[0];
+                im = 0.0f;
+            } else {
+                re = out[2 * k];
+                im = out[2 * k + 1];
+            }
+#else
             float re = out[k][0];
             float im = out[k][1];
-
+#endif
             float mag = std::sqrt(re * re + im * im);
             mag *= norm_factor;
 
