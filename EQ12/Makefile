@@ -77,7 +77,7 @@ endif
 	VST3_INSTALL_DIR ?= $(PREFIX)/lib/vst3
 	else 
 	LV2_INSTALL_DIR ?= ~/.lv2
-	EXE_INSTALL_DIR ?= ~/bin
+	EXE_INSTALL_DIR ?= ~/.bin
 	CLAP_INSTALL_DIR ?= ~/.clap
 	VST3_INSTALL_DIR ?= ~/.vst3
 	endif
@@ -257,9 +257,7 @@ info:
 
 clean :
 	$(QUIET)rm -f *.o *.d *.a *.lib *.clap *.so *.dll
-ifeq ($(PFFFT_SUPPORT),1)
 	$(QUIET)rm -f pffft/*.o pffft/*.d
-endif
 	$(QUIET)rm -f $(NAME) $(NAME).exe 
 	$(QUIET)rm -rf ../bin
 
@@ -307,8 +305,8 @@ endif
 uninstall :
 	$(QUIET)rm -rf $(DESTDIR)$(EXE_INSTALL_DIR)/$(NAME)
 	$(QUIET)rm -rf $(DESTDIR)$(LV2_INSTALL_DIR)/$(BUNDLE)
-	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
-	$(QUIET)rm -rf $(DESTDIR)$(VST3_INSTAL_DIR)/$(VST3_NAME).vst3
+	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTALL_DIR)/$(NAME).clap
+	$(QUIET)rm -rf $(DESTDIR)$(VST3_INSTALL_DIR)/$(VST3_NAME).vst3
 
 $(NAME) : $(OBJECTS)
 ifeq ($(TARGET), Windows)
