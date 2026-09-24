@@ -2318,6 +2318,9 @@ private:
             }
             p++;
         }
+        #ifdef LV2PLUG
+        drawSpectrum(cr, mag_[0], width, height, db_min_, db_max_, 1.5, sample_rate, 0.45, 0.2, 0.75, "", height-100, false, true);
+        #endif
     }
 
     void drawSpectrum(cairo_t* cr, const Vec& mags, int width, int height, float dB_min, float dB_max,
