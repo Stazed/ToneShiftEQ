@@ -81,7 +81,7 @@ private:
     int                             sidechain_set = 0;
     float                           sidechain_gain = 0.0f;
     float                           direct_gain = 0.0f;
-    int                             duck_mode_ = 0.0;
+    int                             duck_mode_ = 0;
 
     float                           spectrumThrottle; 
     static constexpr float          spectrumThrottleMs = 10.0f; 
@@ -181,16 +181,16 @@ void Engine::registerParameters() {
         param.registerParam("Ratio" + std::to_string(i + 1), "Compressor",0, 4, 1,1, (void*)&ip->bands[i].ratio,true,  IS_INT);
     }
 
-    param.registerParam("Volume In", "Global",-46,  12,  0.0,  0.1,     (void*)&vuin->gain,           false,  IS_FLOAT);
-    param.registerParam("SideChain",     "EQ",  0,   1,   0,    1,      (void*)&sidechain,             true,  IS_INT);
+    param.registerParam("Volume In", "Global",-46,  12,  0.0,  0.1,           (void*)&vuin->gain,         false, IS_FLOAT);
+    param.registerParam("SideChain",     "EQ",  0,   1,   0,    1,            (void*)&sidechain,           true, IS_INT);
 
-    param.registerParam("Duck enable", "Compressor",  0,   1,   0,    1,     (void*)&ip->duck_on,            true,  IS_INT);
+    param.registerParam("Duck enable", "Compressor",  0,   1,   0,    1,      (void*)&ip->duck_on,         true,  IS_INT);
     param.registerParam("Duck Threshold", "Compressor", -60.0, 0.0, 0.0, 0.1, (void*)&ip->duck_threshold, false, IS_DOUBLE);
 
-    param.registerParam("Zoom",      "Global",  0,   12,   0,    1,     (void*)&zoom_step,             true,  IS_INT);
-    param.registerParam("Duck tilt","Compressor",-12.0, 12.0, 0.0, 0.5,   (void*)&ip->duck_tilt,      false,  IS_DOUBLE);
+    param.registerParam("Zoom",      "Global",  0,   12,   0,    1,           (void*)&zoom_step,           true, IS_INT);
+    param.registerParam("Duck tilt","Compressor",-12.0, 12.0, 0.0, 0.5,       (void*)&ip->duck_tilt,      false, IS_DOUBLE);
 
-    param.registerParam("Duck Mode",    "Compressor",   0.0,  1.0,  0.0, 0.01,(void*)&ip->duck_mode,     true, IS_INT);
+    param.registerParam("Duck Mode",    "Compressor",   0,  1,  0, 1,         (void*)&ip->duck_mode,       true, IS_INT);
 
     for (int i = 0; i < NumFilters; ++i) {
         param.registerParam("Expand" + std::to_string(i + 1), "Compressor",0, 1, 0,1, (void*)&ip->bands[i].expander,true,  IS_INT);
