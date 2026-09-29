@@ -83,7 +83,7 @@ private:
     float                           direct_gain = 0.0f;
     int                             duck_mode_ = 0;
 
-    float                           spectrumThrottle; 
+    float                           spectrumThrottle = 0.0f; 
     static constexpr float          spectrumThrottleMs = 10.0f; 
 
     int                             pendingMode = 0;
@@ -214,7 +214,7 @@ inline void Engine::init(uint32_t rate, int32_t rt_prio_, int32_t rt_policy_) {
     svf.prepare((double)rate);
     updateCascadeFromParams();
     execute.store(false, std::memory_order_release);
-    spectrumThrottle = 0;
+    spectrumThrottle = 0.0f;
 
     xrworker.start();
     par.start();
@@ -376,11 +376,11 @@ inline void Engine::processBufferIn() {
     if ((ip->duck_mode && anain->hasNewData()) || duck_mode_ != ip->duck_mode) {
         duck_mode_ = ip->duck_mode;
 
-        spectrumThrottle += frames/(s_rate*0.001);
+        spectrumThrottle += (float)frames/(s_rate*0.001);
 
         if (spectrumThrottle >= spectrumThrottleMs) {
             ip->setSidechainSpectrum(anain->getMagnitudes(), anain->getBins());
-            spectrumThrottle = 0;
+            spectrumThrottle = 0.0f;
 
             processIR.store(true, std::memory_order_release);
             workToDo.store(true, std::memory_order_release);

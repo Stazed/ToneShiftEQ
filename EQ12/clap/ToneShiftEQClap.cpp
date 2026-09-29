@@ -492,7 +492,7 @@ static const clap_plugin_descriptor_t toneshifteq_master_descriptor = {
     .url = "https://github.com/brummer10/ToneShiftEQ",
     .manual_url = "https://github.com/brummer10/ToneShiftEQ",
     .support_url = "https://github.com/brummer10/ToneShiftEQ",
-    .version = "1.1.0",
+    .version = "1.2.0",
     .description = "12 band minum phase EQ (128 samples latency)",
     .features = toneshifteq_features,
 };
@@ -506,7 +506,7 @@ static const clap_plugin_descriptor_t toneshifteq_live_descriptor = {
     .url = "https://github.com/brummer10/ToneShiftEQ",
     .manual_url = "https://github.com/brummer10/ToneShiftEQ",
     .support_url = "https://github.com/brummer10/ToneShiftEQ",
-    .version = "1.1.0",
+    .version = "1.2.0",
     .description = "12 band Biquad EQ (0 sampels latency)",
     .features = toneshifteq_features,
 };
