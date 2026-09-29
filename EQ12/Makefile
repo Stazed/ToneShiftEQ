@@ -64,7 +64,7 @@ endif
 	# set bundle name
 	NAME = toneshifteq
 	VST3_NAME = Toneshifteq
-	VER = 1.0.0
+	VER = 1.2.0
 
 	PREFIX ?= /usr
 	# check if user is root
@@ -271,8 +271,8 @@ endif
 uninstall :
 	$(QUIET)rm -rf $(DESTDIR)$(EXE_INSTALL_DIR)/$(NAME)
 	$(QUIET)rm -rf $(DESTDIR)$(LV2_INSTALL_DIR)/$(BUNDLE)
-	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
-	$(QUIET)rm -rf $(DESTDIR)$(VST3_INSTAL_DIR)/$(VST3_NAME).vst3
+	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTALL_DIR)/$(NAME).clap
+	$(QUIET)rm -rf $(DESTDIR)$(VST3_INSTALL_DIR)/$(VST3_NAME).vst3
 
 $(NAME) : $(OBJECTS)
 ifeq ($(TARGET), Windows)
