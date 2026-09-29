@@ -373,7 +373,7 @@ inline void Engine::processBufferIn() {
     if (!frames) return;
         anain->processBlock(abuffer, frames);
 
-    if (ip->duck_mode || duck_mode_ != ip->duck_mode) {
+    if ((ip->duck_mode && anain->hasNewData()) || duck_mode_ != ip->duck_mode) {
         duck_mode_ = ip->duck_mode;
 
         spectrumThrottle += (float)frames/(s_rate*0.001);
