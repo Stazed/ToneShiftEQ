@@ -1,4 +1,3 @@
-
 /*
  * FFTAnalyzer.h
  *
@@ -11,15 +10,20 @@
  * @file FFTAnalyzer.h
  * @brief Real-time FFT-based spectrum analyzer with smoothed magnitude output.
  *
- * Windowed (Hann), overlapping FFT analysis via FFTW using a ring-buffer
+ * Windowed (Hann), overlapping FFT analysis via AudioFFT using a ring-buffer
  * fifo and hop-size-driven processing. Produces per-bin magnitude in dB
  * with asymmetric attack/release smoothing, exposed through a lock-free
  * double-buffered read/write index for safe access from another thread.
+ *
+ * AudioFFT keeps all its state inside the object (no global planner),
+ * so no locking is needed between plugin instances. The object is NOT
+ * safe for concurrent use: processBlock() must only be called from one
+ * thread (the audio thread).
 ****************************************************************/
 
 #pragma once
 
-#include <fftw3.h>
+#include "AudioFFT.h"
 #include <cmath>
 #include <atomic>
 #include <cstring>
@@ -29,12 +33,20 @@ class FFTAnalyzer {
 public:
     FFTAnalyzer() = default;
 
+    FFTAnalyzer(const FFTAnalyzer&) = delete;
+    FFTAnalyzer& operator=(const FFTAnalyzer&) = delete;
+
     ~FFTAnalyzer() {
         cleanup();
     }
 
+    // Allocates. Call from a non-realtime thread. fft_size must be a power of 2.
     void init(int fft_size, float sr) {
-        cleanup(); 
+        cleanup();
+
+        // AudioFFT only asserts on the size (debug builds), so guard here.
+        if (fft_size < 8 || (fft_size & (fft_size - 1)) != 0)
+            return;
 
         N = fft_size;
         bins = fft_size / 2;
@@ -48,29 +60,22 @@ public:
         read_index  = 1;
         buffer_ready.store(false, std::memory_order_relaxed);
 
-        in     = (float*)fftwf_malloc(sizeof(float) * N);
-        out    = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * (bins + 1));
-        window = new float[N];
+        fft.init(N);
+
+        in     = new float[N]();
+        re     = new float[bins + 1]();   // == AudioFFT::ComplexSize(N)
+        im     = new float[bins + 1]();
+        window = new float[N]();
         fifo   = new float[N]();
-        smooth = new float[bins];
+        smooth = new float[bins]();
 
-        mags[0] = new float[bins];
-        mags[1] = new float[bins];
-
-        std::memset(in, 0,  N * sizeof(float));
-        std::memset(out, 0,  N * sizeof(float));
-        std::memset(window, 0, N * sizeof(float));
-        std::memset(fifo, 0, N * sizeof(float));
-        std::memset(smooth, 0, bins * sizeof(float));
-
-        std::memset(mags[0], 0, bins * sizeof(float));
-        std::memset(mags[1], 0, bins * sizeof(float));
+        mags[0] = new float[bins]();
+        mags[1] = new float[bins]();
 
         build_hann(window, N);
 
         float window_gain = compute_window_gain(window, N);
         norm_factor = (2.0f / (N * window_gain));
-        plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
 
         for (int i = 0; i < bins; ++i) smooth[i] = -90.0f;
 
@@ -140,15 +145,17 @@ public:
     void cleanup() {
         if (!initialized) return;
 
-        fftwf_destroy_plan(plan);
-        fftwf_free(in);
-        fftwf_free(out);
-
+        delete[] in;
+        delete[] re;
+        delete[] im;
         delete[] window;
         delete[] fifo;
         delete[] smooth;
         delete[] mags[0];
         delete[] mags[1];
+
+        in = re = im = window = fifo = smooth = nullptr;
+        mags[0] = mags[1] = nullptr;
 
         initialized = false;
     }
@@ -158,12 +165,14 @@ private:
     float dc_x1 = 0.0f, dc_y1 = 0.0f;
     float sample_rate = 0.0f;
 
+    audiofft::AudioFFT fft;
+
     float* in = nullptr;
+    float* re = nullptr;
+    float* im = nullptr;
     float* window = nullptr;
     float* fifo = nullptr;
     float* smooth = nullptr;
-    fftwf_complex* out = nullptr;
-    fftwf_plan plan = nullptr;
 
     float* mags[2] = {nullptr, nullptr};
 
@@ -239,15 +248,13 @@ private:
                 idx = 0;
         }
 
-        fftwf_execute(plan);
+        // forward transform: unnormalized, split-complex, bins 0..N/2
+        fft.fft(in, re, im);
 
         float* write_buf = mags[write_index];
 
         for (int k = 0; k < bins; ++k) {
-            float re = out[k][0];
-            float im = out[k][1];
-
-            float mag = std::sqrt(re * re + im * im);
+            float mag = std::sqrt(re[k] * re[k] + im[k] * im[k]);
             mag *= norm_factor;
 
             if (!std::isfinite(mag) || mag <= 0.0f)

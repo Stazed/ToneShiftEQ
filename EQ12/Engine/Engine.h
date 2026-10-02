@@ -485,7 +485,9 @@ inline void Engine::process(uint32_t nframes, const float* sideput,
     processDynamic();
     applyDynamicGains();
     com.setBypass(conv->bypass);
-    com.processBlock(nframes, output, output1);
+    if (!ip->duck_mode) {
+        com.processBlock(nframes, output, output1);
+    }
 
     if (fadeGain < 1.0f) {
         for (uint32_t i = 0; i < nframes; ++i) {

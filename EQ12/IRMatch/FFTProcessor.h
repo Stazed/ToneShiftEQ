@@ -13,8 +13,9 @@
 #include <complex>
 #include <cmath>
 #include <algorithm>
+#include <map>
 
-#include <fftw3.h>
+#include "AudioFFT.h"
 
 /****************************************************************
  * @file FFTProcessor.h
@@ -28,52 +29,27 @@ public:
     using CVec = std::vector<Complex>;
 
     static CVec fft(const CVec& in) {
-        int N = (int)in.size();
-
-        fftw_complex *input = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N);
-        fftw_complex *output = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N);
-
-        for (int i = 0; i < N; ++i) {
-            input[i][0] = in[i].real();
-            input[i][1] = in[i].imag();
-        }
-
-        fftw_plan p = fftw_plan_dft_1d(N, input, output, FFTW_FORWARD, FFTW_ESTIMATE);
-        fftw_execute(p);
-
+        const size_t N = in.size();
+        std::vector<double> x(N), re(N/2 + 1), im(N/2 + 1);
+        for (size_t i = 0; i < N; ++i) x[i] = in[i].real();
+        audiofft::AudioFFT f;
+        f.init(N);
+        f.fft(x.data(), re.data(), im.data());
         CVec out(N);
-        for (int i = 0; i < N; ++i)
-            out[i] = Complex(output[i][0], output[i][1]);
-
-        fftw_destroy_plan(p);
-        fftw_free(input);
-        fftw_free(output);
-
+        for (size_t k = 0; k <= N/2; ++k) out[k] = Complex(re[k], im[k]);
+        for (size_t k = N/2 + 1; k < N; ++k) out[k] = std::conj(out[N - k]);
         return out;
     }
 
     static CVec ifft(const CVec& in) {
-        int N = (int)in.size();
-
-        fftw_complex *input = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N);
-        fftw_complex *output = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * N);
-
-        for (int i = 0; i < N; ++i) {
-            input[i][0] = in[i].real();
-            input[i][1] = in[i].imag();
-        }
-
-        fftw_plan p = fftw_plan_dft_1d(N, input, output, FFTW_BACKWARD, FFTW_ESTIMATE);
-        fftw_execute(p);
-
+        const size_t N = in.size();
+        std::vector<double> re(N/2 + 1), im(N/2 + 1), x(N);
+        for (size_t k = 0; k <= N/2; ++k) { re[k] = in[k].real(); im[k] = in[k].imag(); }
+        audiofft::AudioFFT f;
+        f.init(N);
+        f.ifft(x.data(), re.data(), im.data());
         CVec out(N);
-        for (int i = 0; i < N; ++i)
-            out[i] = Complex(output[i][0] / N, output[i][1] / N);
-
-        fftw_destroy_plan(p);
-        fftw_free(input);
-        fftw_free(output);
-
+        for (size_t i = 0; i < N; ++i) out[i] = Complex(x[i], 0.0);
         return out;
     }
 

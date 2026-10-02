@@ -6,7 +6,10 @@
  * Stereo partitioned convolver:
  *
  *   Convolver  — 128 samples latency, minimum-phase, host-compensated.
- * 
+ *
+ * FFT layer: AudioFFT (split-complex, all state inside the object, no global
+ * planner -> no locking needed between plugin instances).
+ *
  * Copyright (C) 2026 brummer <brummer@web.de>
  */
 
@@ -14,8 +17,10 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstring>
-#include <fftw3.h>
+
+#include "AudioFFT.h"
 
 // ============================================================================
 // Convolver — 128 samples latency, minimum-phase
@@ -24,31 +29,24 @@
 class Convolver {
 public:
     Convolver() {
-        buildIn   = (double*)      fftw_malloc(sizeof(double)       * FFT_SIZE);
-        buildFreq = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * NUM_BINS);
-        buildPlan = fftw_plan_dft_r2c_1d(FFT_SIZE, buildIn, buildFreq, FFTW_ESTIMATE);
-
-        init(chL);
-        init(chR);
+        // init() allocates -> constructor only, never in the audio thread
+        buildFft.init(FFT_SIZE);
+        initChannel(chL);
+        initChannel(chR);
     }
 
     ~Convolver() {
-        destroy(chL);
-        destroy(chR);
         delete activeIR.load();
         delete pendingIR.load();
-        delete trash;
-
-        fftw_destroy_plan(buildPlan);
-        fftw_free(buildIn);
-        fftw_free(buildFreq);
+        delete trash.load();
     }
 
     void setBypass(int bp) { bypass = bp; }
 
+    // Must not be called concurrently from several threads (shares buildFft/buildIn).
     void setIR(const double* irL, const double* irR) {
-        delete trash;
-        trash = nullptr;
+        // Collect the IR the audio thread retired after its last swap.
+        delete trash.exchange(nullptr);
 
         IRData* ir = new IRData();
         build(ir->H_L, irL);
@@ -85,24 +83,28 @@ private:
     static constexpr size_t IR_LENGTH = 4096;
     static constexpr size_t PART_SIZE = 128;
     static constexpr size_t FFT_SIZE  = PART_SIZE * 2;
-    static constexpr size_t NUM_BINS  = FFT_SIZE / 2 + 1;
+    static constexpr size_t NUM_BINS  = FFT_SIZE / 2 + 1;   // == AudioFFT::ComplexSize(FFT_SIZE)
 
     static constexpr size_t NUM_PARTS        = IR_LENGTH / PART_SIZE;  // 32
     static constexpr size_t OUTPUT_FIFO_SIZE = PART_SIZE * 8;
 
     int bypass = 0;
 
-    double*       buildIn   = nullptr;
-    fftw_complex* buildFreq = nullptr;
-    fftw_plan     buildPlan = nullptr;
+    // Only used by setIR()/build(), i.e. never from the audio thread.
+    audiofft::AudioFFT          buildFft;
+    std::array<float, FFT_SIZE> buildIn{};
 
-    struct Complex { double re = 0.0, im = 0.0; };
-    using Spectrum = std::array<Complex, NUM_BINS>;
-    using Part     = std::array<Spectrum, NUM_PARTS>;
+    // Split-complex spectrum (bins 0..N/2, as AudioFFT delivers it)
+    struct Spectrum {
+        std::array<float, NUM_BINS> re{};
+        std::array<float, NUM_BINS> im{};
+    };
+    using Part = std::array<Spectrum, NUM_PARTS>;
 
     struct IRData { Part H_L, H_R; };
 
-    IRData* trash = nullptr;
+    // Slot for the IR retired by the audio thread; freed by setIR()/destructor.
+    std::atomic<IRData*> trash {nullptr};
 
     struct Channel {
         std::array<float,  PART_SIZE> dryDelay{};
@@ -113,14 +115,16 @@ private:
         size_t outRead = 0, outWrite = 0, available = 0;
         std::array<Spectrum, NUM_PARTS> Xhistory{};
         size_t historyPos = 0;
-        std::array<double, PART_SIZE> overlap{};
+        std::array<float, PART_SIZE> overlap{};
 
-        double*       fftIn    = nullptr;
-        double*       fftOut   = nullptr;
-        fftw_complex* fftFreq  = nullptr;
-        fftw_complex* fftAccum = nullptr;
-        fftw_plan     planFwd  = nullptr;
-        fftw_plan     planInv  = nullptr;
+        // Upper half of fftIn stays zero forever (zero padding), only the
+        // lower half is rewritten per block.
+        std::array<float, FFT_SIZE> fftIn{};
+        std::array<float, FFT_SIZE> fftOut{};
+        std::array<float, NUM_BINS> accRe{};
+        std::array<float, NUM_BINS> accIm{};
+
+        audiofft::AudioFFT fft;   // one object per channel: not usable concurrently
     };
 
     Channel chL, chR;
@@ -134,52 +138,41 @@ private:
         ch.inFill = 0;
         ch.outFifo.fill(0.0f);
         ch.outRead = ch.outWrite = ch.available = 0;
-        ch.overlap.fill(0.0);
+        ch.overlap.fill(0.0f);
         ch.historyPos = 0;
-        for (auto& s : ch.Xhistory)
-            for (auto& b : s)
-                b = {0.0, 0.0};
+        for (auto& s : ch.Xhistory) {
+            s.re.fill(0.0f);
+            s.im.fill(0.0f);
+        }
+        ch.fftIn.fill(0.0f);
+        ch.fftOut.fill(0.0f);
+        ch.accRe.fill(0.0f);
+        ch.accIm.fill(0.0f);
     }
 
-    void init(Channel& ch) {
-        ch.fftIn    = (double*)      fftw_malloc(sizeof(double)       * FFT_SIZE);
-        ch.fftOut   = (double*)      fftw_malloc(sizeof(double)       * FFT_SIZE);
-        ch.fftFreq  = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * NUM_BINS);
-        ch.fftAccum = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * NUM_BINS);
-        ch.planFwd  = fftw_plan_dft_r2c_1d(FFT_SIZE, ch.fftIn,    ch.fftFreq,  FFTW_ESTIMATE);
-        ch.planInv  = fftw_plan_dft_c2r_1d(FFT_SIZE, ch.fftAccum, ch.fftOut,   FFTW_ESTIMATE);
+    void initChannel(Channel& ch) {
+        ch.fft.init(FFT_SIZE);
         resetChannel(ch);
     }
 
-    void destroy(Channel& ch) {
-        if (ch.planFwd) fftw_destroy_plan(ch.planFwd);
-        if (ch.planInv) fftw_destroy_plan(ch.planInv);
-        fftw_free(ch.fftIn);
-        fftw_free(ch.fftOut);
-        fftw_free(ch.fftFreq);
-        fftw_free(ch.fftAccum);
-    }
-
     void build(Part& H, const double* ir) {
-        // Reuse permanent buildPlan — no planner access at runtime
         for (size_t p = 0; p < NUM_PARTS; ++p) {
-            std::memset(buildIn, 0, sizeof(double) * FFT_SIZE);
+            buildIn.fill(0.0f);
             for (size_t i = 0; i < PART_SIZE; ++i) {
                 size_t idx = p * PART_SIZE + i;
-                if (idx < IR_LENGTH) buildIn[i] = ir[idx];
+                if (idx < IR_LENGTH) buildIn[i] = static_cast<float>(ir[idx]);
             }
-            fftw_execute(buildPlan);
-            for (size_t k = 0; k < NUM_BINS; ++k) {
-                H[p][k].re = buildFreq[k][0];
-                H[p][k].im = buildFreq[k][1];
-            }
+            // transform straight into the partition's spectrum
+            buildFft.fft(buildIn.data(), H[p].re.data(), H[p].im.data());
         }
     }
 
     void swapIR() {
         IRData* p = pendingIR.exchange(nullptr);
         if (!p) return;
-        trash = activeIR.exchange(p);
+        // Never delete in the audio thread: hand the old IR over to setIR().
+        // (setIR() empties this slot before it can post the next pending IR.)
+        trash.store(activeIR.exchange(p));
     }
 
     inline float processDry(Channel& ch, float in) {
@@ -219,33 +212,38 @@ private:
     }
 
     void runBlock(Channel& ch, const Part& H) {
-        std::memset(ch.fftIn, 0, sizeof(double) * FFT_SIZE);
         for (size_t i = 0; i < PART_SIZE; ++i)
             ch.fftIn[i] = ch.inFifo[i];
-        fftw_execute(ch.planFwd);
 
+        // forward FFT directly into the newest history slot
         ch.historyPos = (ch.historyPos + NUM_PARTS - 1) % NUM_PARTS;
         Spectrum& Xnew = ch.Xhistory[ch.historyPos];
-        for (size_t k = 0; k < NUM_BINS; ++k) {
-            Xnew[k].re = ch.fftFreq[k][0];
-            Xnew[k].im = ch.fftFreq[k][1];
-        }
+        ch.fft.fft(ch.fftIn.data(), Xnew.re.data(), Xnew.im.data());
 
-        std::memset(ch.fftAccum, 0, sizeof(fftw_complex) * NUM_BINS);
+        // frequency-domain multiply-accumulate over all partitions
+        float* accRe = ch.accRe.data();
+        float* accIm = ch.accIm.data();
+        for (size_t k = 0; k < NUM_BINS; ++k) { accRe[k] = 0.0f; accIm[k] = 0.0f; }
+
         for (size_t p = 0; p < NUM_PARTS; ++p) {
             const Spectrum& X  = ch.Xhistory[(ch.historyPos + p) % NUM_PARTS];
             const Spectrum& Hp = H[p];
+            const float* xr = X.re.data();
+            const float* xi = X.im.data();
+            const float* hr = Hp.re.data();
+            const float* hi = Hp.im.data();
             for (size_t k = 0; k < NUM_BINS; ++k) {
-                ch.fftAccum[k][0] += X[k].re * Hp[k].re - X[k].im * Hp[k].im;
-                ch.fftAccum[k][1] += X[k].re * Hp[k].im + X[k].im * Hp[k].re;
+                accRe[k] += xr[k] * hr[k] - xi[k] * hi[k];
+                accIm[k] += xr[k] * hi[k] + xi[k] * hr[k];
             }
         }
-        fftw_execute(ch.planInv);
 
-        constexpr double scale = 1.0 / FFT_SIZE;
+        // AudioFFT::ifft() already scales (no 1/N here)
+        ch.fft.ifft(ch.fftOut.data(), accRe, accIm);
+
         for (size_t i = 0; i < PART_SIZE; ++i) {
-            float v = (float)(ch.fftOut[i] * scale + ch.overlap[i]);
-            ch.overlap[i] = ch.fftOut[i + PART_SIZE] * scale;
+            float v = ch.fftOut[i] + ch.overlap[i];
+            ch.overlap[i] = ch.fftOut[i + PART_SIZE];
             pushOutput(ch, v);
         }
     }

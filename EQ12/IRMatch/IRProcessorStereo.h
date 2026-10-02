@@ -145,35 +145,30 @@ public:
         updateIR(refL_trunc, refR_trunc, srcL_trunc, srcR_trunc, rebuild);
     }
 
-    Vec& getIR(const Vec& refL, const Vec& refR,
-                   double sampleRate_, size_t irLength_ = 4096,
-                   bool rebuild = false, size_t fftSize = 0) {
+    Vec& getIR(const Vec& refL, const Vec& refR, double sr, size_t irLen = 4096,
+               bool rebuild = false, size_t fftSize = 0) {
+        Vec ref = mergeAverage(refL, refR);
+        if (ref.empty()) {
+            getir_result_.clear();
+            return getir_result_;
+        }
 
-        sampleRate = sampleRate_;
-        irLength = irLength_;
+        size_t N = (fftSize > 0) ? fftSize : next_pow2(ref.size());
+        N = std::max<size_t>(N, irLen * 2);
 
-        size_t maxAnalysisSize = sampleRate * 4;
+        CVec a(N);
+        for (size_t i = 0; i < ref.size() && i < N; ++i) a[i] = ref[i];
 
-        Vec refL_trunc = center_crop(refL, maxAnalysisSize);
-        Vec refR_trunc = center_crop(refR, maxAnalysisSize);
-        Vec ref = mergeAverage(refL,refR);
+        Vec mag = magnitude_db(FFTProcessor::fft(a));
 
-        size_t maxSize = std::max({ ref.size(), ref.size()});
+        IRDesigner localDesigner;
+        mag = localDesigner.adaptive_log_smooth(mag, sr);
 
-        analysisN = (fftSize > 0) ? fftSize : next_pow2(maxSize);
-        analysisN = std::max<size_t>(analysisN, irLength * 2);
-        synthesisN = next_pow2(irLength * 2);
-        CVec a(analysisN);
-        for (size_t i = 0; i < ref.size(); ++i)
-            a[i] = ref[i];
-        CVec f1 = fp.fft(a);
-        gui_ref_ = magnitude_db(f1);
-        gui_ref_ = designer.adaptive_log_smooth(gui_ref_, sampleRate);
+        double pk = *std::max_element(mag.begin(), mag.end());
+        for (auto& v : mag) v -= pk;
 
-        double peak = *std::max_element(gui_ref_.begin(), gui_ref_.end());
-        for (auto& v : gui_ref_)  v -= peak;
-
-        return gui_ref_;
+        getir_result_ = std::move(mag);
+        return getir_result_;
     }
 
     void computeIR(double sampleRate_, size_t irLength_ = 4096,
@@ -285,6 +280,7 @@ private:
     Vec gui_ref_;
     Vec gui_diff_;
     Vec gui_src_;
+    Vec getir_result_;
 
     size_t analysisN = 4096;
     size_t synthesisN = 4096;

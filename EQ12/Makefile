@@ -86,10 +86,13 @@ endif
 	PIXMAPS_DIR ?= $(SHARE_DIR)/pixmaps
 	PKGCONFIG = pkg-config
 
-	INCLUDES := -I.. -I./Convolver -I./Engine -I./FileIO -I./GUI -I./IRMatch
+	INCLUDES := -I.. -I./Convolver -I./Engine -I./FileIO -I./GUI -I./IRMatch -I./AudioFFT
 	LIB_DIR := ../libxputty/libxputty/
 	HEADER_DIR := $(LIB_DIR)include/
 	UI_LIB:= $(LIB_DIR)libxputty.$(STATIC_LIB_EXT)
+
+	FFT_DIR := ./AudioFFT/
+	FFT_SOURCE := $(FFT_DIR)AudioFFT.cpp
 
 	BUNDLE := ToneShiftEQ.lv2
 	LV2_DIR := ./lv2/
@@ -100,11 +103,11 @@ endif
 
 	CLAP_DIR := ./clap/
 	CLAP_INCLUDE := -I./clap/clap/ -I./clap/
-	CLAP_SOURCES := $(CLAP_DIR)ToneShiftEQClap.cpp
+	CLAP_SOURCES := $(CLAP_DIR)ToneShiftEQClap.cpp $(FFT_SOURCE)
 
 	VST3_DIR := ./vst3/
 	VST3_INCLUDE := -I./vst3/travesty -I./vst3/
-	VST3_SOURCES := $(VST3_DIR)ToneShiftEQVST3.cpp
+	VST3_SOURCES := $(VST3_DIR)ToneShiftEQVST3.cpp $(FFT_SOURCE)
 	ARCH = `echo $(UNAME_S) | tr A-Z a-z`
 	VST3_BUNDLE := $(VST3_NAME).vst3/Contents/$(UNAME_M)-$(ARCH)/
 
@@ -114,7 +117,7 @@ ifeq ($(TARGET), Linux)
 	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
 	-Wl,-Bdynamic `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11`
 
-	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile fftw3 `\
+	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile `\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
 
@@ -124,7 +127,7 @@ ifeq ($(TARGET), Linux)
 	-fvisibility=hidden -fvisibility-inlines-hidden
 
 	LDFLAGS += $(INCLUDES) -lm -pthread -lpthread -lstdc++ $(GUI_LDFLAGS) \
-	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile fftw3 fftw3f $(BACKEND) `
+	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(BACKEND) `
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
 	endif
@@ -139,7 +142,7 @@ else ifeq ($(TARGET), Windows)
 	VST3_BUNDLE := $(VST3_NAME).vst3/Contents/$(UNAME_M)-win/
 
 	LDFLAGS += $(INCLUDES) -I. -shared -lm $(PAWPAW_LFLAGS) -Wl,--gc-sections \
-	-Wl,--exclude-libs,ALL `$(PKGCONFIG) --libs --libs sndfile fftw3 fftw3f`
+	-Wl,--exclude-libs,ALL `$(PKGCONFIG) --libs --libs sndfile `
 
 	GUI_LDFLAGS += -I$(HEADER_DIR) -static-libgcc -static-libstdc++ \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo ` \
@@ -147,7 +150,7 @@ else ifeq ($(TARGET), Windows)
 
 	CFLAGS := -Wall -fstack-protector -fvisibility=hidden \
 	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
-	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile fftw3 `
+	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile `
 
 	CXXFLAGS += -MMD -std=c++17 -fno-math-errno -fno-trapping-math -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
@@ -157,7 +160,7 @@ else ifeq ($(TARGET), Windows)
 endif
 
 	# invoke build files
-	OBJECTS = main.cpp
+	OBJECTS = main.cpp $(FFT_SOURCE)
 
 	DEPS = $(NAME)_app.d $(NAME)_lv2.d $(NAME)_clap.d $(NAME).d $(NAME)_ui.d $(NAME)_vst3.d
 
@@ -306,7 +309,7 @@ ifeq ($(TARGET), Windows)
 	@$(B_ECHO) "LV2 not supported under Windows $(reset)"
 else
 	@$(B_ECHO) "Compiling $(NAME).$(LIB_EXT) $(reset)"
-	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_lv2.d $(CXXFLAGS) $(LV2_INCLUDE) $(LV2_PLUGIN).cpp -o $(NAME).$(LIB_EXT) $(LDFLAGS)
+	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_lv2.d $(CXXFLAGS) $(LV2_INCLUDE) $(LV2_PLUGIN).cpp $(FFT_SOURCE) -o $(NAME).$(LIB_EXT) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).$(LIB_EXT)
 endif

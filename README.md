@@ -116,6 +116,7 @@ ToneShiftEQ provides two interchangeable processing engines.
 The FFT engine generates a minimum-phase impulse response from the current EQ settings
 and processes audio using partitioned FFT convolution. It also supports importing
 existing impulse responses by approximating them with the internal EQ model.
+Under the hood it use [AudioFFT](https://github.com/HiFi-LoFi/AudioFFT) by HiFi-LoFi.
 
 The Biquad engine implements the same filter configuration as a cascade of
 second-order IIR filters for true zero-latency operation.
@@ -146,7 +147,6 @@ ToneShiftEQ relies on a small set of widely available libraries:
 * **X11** – windowing (Linux)
 * **cairo** – UI rendering
 * **libsndfile** – audio I/O
-* **FFTW3** – spectral processing
 * **jackd** – Stand-alone real-time audio
 * **lv2-dev** – is needed when build the LV2 plugin
 

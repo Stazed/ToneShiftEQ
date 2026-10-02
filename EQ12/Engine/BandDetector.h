@@ -46,13 +46,20 @@ public:
     void process(const float input) {
         // Bandpass
         float y = filter.process(input);
+        // denormal protection
+        if (std::fabs(y) < 1e-18f) y = 0.0f;
         // Instantaneous power
         float level = y * y;
+        // denormal protection
+        if (level < 1e-30f) level = 0.0f;
         // Attack / Release envelope
-        if (level > envelope)
+        if (level > envelope) {
             envelope += attack * (level - envelope);
-        else
+        } else {
             envelope += release * (level - envelope);
+            // denormal protection
+        }
+        if (std::fabs(envelope) < 1e-18f) envelope = 0.0f;
 
     }
 

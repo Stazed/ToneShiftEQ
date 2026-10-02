@@ -191,6 +191,7 @@ public:
 
     inline float process(float x) {
         float y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+        if (std::fabs(y) < 1e-18f) y = 0.0f;
 
         x2=x1;
         x1=x;
@@ -467,6 +468,7 @@ public:
         smooth(a2, ta2);
 
         float y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+        if (std::fabs(y) < 1e-18f) y = 0.0f;
 
         x2 = x1;
         x1 = x;
@@ -768,6 +770,7 @@ public:
         float tmp = z1 * f + (x - z2) * e;
         if (std::fabs(tmp) < 1e-15f) tmp = 0.0f;
         float y = tmp * t0 + z1 * t1 + z2 * t2;
+        if (std::fabs(y) < 1e-18f) y = 0.0f;
         z2 = tmp * e + z2;
         if (std::fabs(z2) < 1e-15f)  z2 = 0.0f;
         z1 = tmp;
@@ -1041,6 +1044,7 @@ public:
         float tmp = z1 * f + (x - z2) * e;
         if (std::fabs(tmp) < 1e-15f) tmp = 0.0f;
         float y = tmp * t0 + z1 * t1 + z2 * t2;
+        if (std::fabs(y) < 1e-18f) y = 0.0f;
         z2 = tmp * e + z2;
         if (std::fabs(z2) < 1e-15f) z2 = 0.0f;
         z1 = tmp;
