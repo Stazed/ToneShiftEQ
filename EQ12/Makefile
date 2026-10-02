@@ -76,7 +76,7 @@ endif
 	VST3_INSTALL_DIR ?= $(PREFIX)/lib/vst3
 	else 
 	LV2_INSTALL_DIR ?= ~/.lv2
-	EXE_INSTALL_DIR ?= ~/bin
+	EXE_INSTALL_DIR ?= ~/.bin
 	CLAP_INSTALL_DIR ?= ~/.clap
 	VST3_INSTALL_DIR ?= ~/.vst3
 	endif
