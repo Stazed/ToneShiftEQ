@@ -152,7 +152,7 @@ ToneShiftEQ relies on a small set of widely available libraries:
 
 ### Install (Debian/Ubuntu)
 
-    sudo apt install libx11-dev libcairo2-dev libsndfile1-dev libfftw3-dev libjack-jackd2-dev
+    sudo apt install libx11-dev libcairo2-dev libsndfile1-dev libjack-jackd2-dev
 
 ---
 

@@ -136,11 +136,16 @@ public:
 
     inline float process(float v0) noexcept {
         float v3 = v0 - ic2eq;
+        if (std::fabs(v3) < 1e-18f) v3 = 0.0f;
         float v1 = a1 * ic1eq + a2 * v3;
+        if (std::fabs(v1) < 1e-18f) v1 = 0.0f;
         float v2 = ic2eq + a2 * ic1eq + a3 * v3;
+        if (std::fabs(v2) < 1e-18f) v2 = 0.0f;
         ic1eq = 2.0f * v1 - ic1eq;
         ic2eq = 2.0f * v2 - ic2eq;
-        return m0 * v0 + m1 * v1 + m2 * v2;
+        float y = m0 * v0 + m1 * v1 + m2 * v2;
+        if (std::fabs(y) < 1e-18f) y = 0.0f;
+        return y;
     }
 
 private:
