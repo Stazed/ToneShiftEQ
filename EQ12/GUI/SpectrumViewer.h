@@ -229,6 +229,13 @@ public:
 
         Widget_t* laframe = add_my_z_frame(spec,"", 0, 331, width-130, 100);
         laframe->scale.gravity = WESTEAST;
+        #if defined(_WIN32)
+        {
+            laframe->flags |= DONT_PROPAGATE;
+            LONG_PTR st = GetWindowLongPtr(laframe->widget, GWL_STYLE);
+            SetWindowLongPtr(laframe->widget, GWL_STYLE, st | WS_CLIPCHILDREN);
+        }
+        #endif
 
         ph = add_my_button(spec, width-165, 0, 20, 20, "φ");
         ph->parent_struct = this;
@@ -239,6 +246,13 @@ public:
         for (int i = 0; i<FilterTypes::NumFilters; i++) {
             frame[i] = add_my_panel(laframe,"", 275, 0, 270, 99);
             frame[i]->scale.gravity = NORTCENTER;
+            #if defined(_WIN32)
+            {
+                frame[i]->flags |= DONT_PROPAGATE;
+                LONG_PTR st = GetWindowLongPtr(frame[i]->widget, GWL_STYLE);
+                SetWindowLongPtr(frame[i]->widget, GWL_STYLE, st | WS_CLIPCHILDREN);
+            }
+            #endif
             double r,g,bcol;
             get_band_color(i, r, g, bcol);
             set_widget_color(frame[i], (Color_state)0, (Color_mod)1, r, g, bcol, 1.0);
@@ -607,7 +621,10 @@ public:
             }
             p++;
         }
-       if (setRefresh) expose_widget(spec);
+       if (setRefresh) {
+           expose_widget(spec);
+           expose_widget(frame[active_panel]);
+       }
     }
 
     void check_irmatch() {
