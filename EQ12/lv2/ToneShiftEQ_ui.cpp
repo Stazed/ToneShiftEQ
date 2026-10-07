@@ -370,10 +370,12 @@ int XToneShiftEQ_UI::idle(LV2UI_Handle handle) {
             self->sw.setFilter(self->engine->getIRMag().data(), 4096);
             self->sw.setPhase(self->engine->getPhase().data(), 1024);
         }
-        if (self->engine->hasNewInData()) {
+        if (self->engine->hasNewInData() != self->engine->lastAnaInSeq) {
+            self->engine->lastAnaInSeq = self->engine->hasNewInData();
             self->sw.setInSpec(self->engine->getInMagnitudes(), self->engine->getInBins());
         }
-        if (self->engine->hasNewData()) {
+        if (self->engine->hasNewData() != self->engine->lastAnaSeq) {
+            self->engine->lastAnaSeq = self->engine->hasNewData();
             self->sw.setSpec(self->engine->getMagnitudes(), self->engine->getBins());
         }
    } else if (self->check) {

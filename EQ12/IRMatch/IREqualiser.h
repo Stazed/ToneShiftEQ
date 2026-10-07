@@ -230,7 +230,7 @@ public:
         for (size_t i = 0; i < n; ++i) {
             double f = (double)i / (n - 1) * nyquist;
             double w = 2.0 * M_PI * f / sr;
-            std::complex<double> z     = std::polar(1.0, w);
+            std::complex<double> z = std::polar(1.0, w);
             std::complex<double> alpha = 2.0 / (z + 1.0);
 
             double sumDb = 0.0;
@@ -243,62 +243,98 @@ public:
     static void apply_spectral_dynamics(Vec& mag, double sr, const Band* bands, size_t count, int solo_enabled,
                         int solo_band, const Vec& sidechainDb, double thresholdDb, double tilt, double amount) {
         const size_t n = mag.size();
-        if (!n || sidechainDb.size() != n) return;
+        if (n < 2 || sidechainDb.size() != n) return;
 
-        const double nyquist = sr * 0.5;
+        const double nyquist  = sr * 0.5;
+        const double binPerHz = (double)(n - 1) / nyquist;
 
-        for (size_t i = 0; i < n; ++i) {
-            double freq = (double)i / (n - 1) * nyquist;
-            if (freq < 1.0) continue;
+        // depends only on (n, sr): log2(freq/1000) per bin, first bin >= 1 Hz
+        static thread_local Vec log2f;
+        static thread_local size_t cacheN = 0;
+        static thread_local size_t firstBin = 0;
+        static thread_local double cacheSr = 0.0;
+        if (cacheN != n || cacheSr != sr) {
+            log2f.assign(n, 0.0);
+            firstBin = n;
+            for (size_t i = 0; i < n; ++i) {
+                double freq = (double)i / (n - 1) * nyquist;
+                if (freq < 1.0) continue;
+                if (firstBin == n) firstBin = i;
+                log2f[i] = std::log2(freq / 1000.0);
+            }
+            cacheN = n;
+            cacheSr = sr;
+        }
+        if (firstBin >= n) return;
 
-            double tiltOffsetDB = tilt * std::log2(freq / 1000.0);
-            double baseThreshold = thresholdDb + tiltOffsetDB;
-            double response = 0.0;
+        // excess of the sidechain over the global (tilted) threshold, once per bin
+        static thread_local Vec exc0;
+        exc0.resize(n);
+        for (size_t i = firstBin; i < n; ++i)
+            exc0[i] = sidechainDb[i] - (thresholdDb + tilt * log2f[i]);
 
-            for (size_t bi = 0; bi < count; ++bi) {
-                const Band& b = bands[bi];
-                if (solo_enabled && solo_band != (int)bi) continue;
-                if (!b.enabled || b.mute) continue;
+        // masks below exp(-CUT) (~1e-6) are not evaluated
+        constexpr double CUT = 13.8;
+        const double log2_1000 = std::log2(1000.0);
 
-                double m = 0.0;
-                switch (b.type) {
-                    case Band::Peak:
-                        m = eval_peak_db(freq, b.freq, 1.0, b.Q);
-                        break;
-                    case Band::LowShelf:
-                        m = eval_low_shelf(freq, b.freq, 1.0, b.Q);
-                        break;
-                    case Band::HighShelf:
-                        m = eval_high_shelf(freq, b.freq, 1.0, b.Q);
-                        break;
-                    default:
-                        continue;
-                }
-                if (m <= 0.0) continue;
+        for (size_t bi = 0; bi < count; ++bi) {
+            const Band& b = bands[bi];
+            if (solo_enabled && solo_band != (int)bi) continue;
+            if (!b.enabled || b.mute) continue;
+            if (b.type != Band::Peak && b.type != Band::LowShelf && b.type != Band::HighShelf) continue;
 
-                double ratio = 3.0;
-                switch (b.ratio) {
-                    case 0: ratio = 2.0;  break;
-                    case 1: ratio = 3.0;  break;
-                    case 2: ratio = 4.0;  break;
-                    case 3: ratio = 5.0;  break;
-                    case 4: ratio = 10.0; break;
-                    default: ratio = 3.0; break;
-                }
+            double ratio;
+            switch (b.ratio) {
+                case 0: ratio = 2.0;  break;
+                case 1: ratio = 3.0;  break;
+                case 2: ratio = 4.0;  break;
+                case 3: ratio = 5.0;  break;
+                case 4: ratio = 10.0; break;
+                default: ratio = 3.0; break;
+            }
+            const double bandThr = b.threshold * (1.0 - 1.0 / ratio);
+            const double c0 = std::log2(b.freq + 1e-9) - log2_1000;   // log2(f0/1000)
+            const bool   ex = b.expander;
 
-                double band_threshold = b.threshold * (1.0 - (1.0 / ratio));
-                double excess = sidechainDb[i] - (baseThreshold + band_threshold);
-                if (excess <= 0.0) continue;
-
-                double r = excess * m * amount;
-                if (b.expander) {
-                    const double max_boost = 12.0;
-                    r = std::tanh(r / max_boost) * max_boost;
-                }
-                response += b.expander ? r : -r;
+            // half width (in octaves) of the region where the mask is relevant
+            double halfW, k = 0.0, slope = 0.0;
+            if (b.type == Band::Peak) {
+                double sigma = q_to_sigma(mapQp(b.Q));
+                k     = 0.5 / (sigma * sigma);
+                halfW = sigma * std::sqrt(2.0 * CUT);
+            } else {
+                slope = mapQp(b.Q) * 2.0;
+                halfW = CUT / (2.0 * slope);
             }
 
-            if (response != 0.0) mag[i] += response;
+            size_t lo = firstBin, hi = n;
+            const double loBin = std::floor(b.freq * std::exp2(-halfW) * binPerHz);
+            const double hiBin = std::ceil (b.freq * std::exp2( halfW) * binPerHz);
+            if (b.type != Band::LowShelf  && loBin > (double)lo) lo = (size_t)std::min(loBin, (double)n);
+            if (b.type != Band::HighShelf && hiBin + 1.0 < (double)hi) hi = (size_t)hiBin + 1;
+
+            for (size_t i = lo; i < hi; ++i) {
+                const double excess = exc0[i] - bandThr;
+                if (excess <= 0.0) continue;
+
+                const double x = log2f[i] - c0; // log2(freq/f0)
+                double m;
+
+                if (b.type == Band::Peak)
+                    m = std::exp(-k * x * x);
+                else if (b.type == Band::LowShelf)
+                    m = 1.0 / (1.0 + std::exp( 2.0 * slope * x));
+                else
+                    m = 1.0 / (1.0 + std::exp(-2.0 * slope * x));
+
+                double r = excess * m * amount;
+                if (ex) {
+                    const double max_boost = 12.0;
+                    mag[i] += std::tanh(r / max_boost) * max_boost;
+                } else {
+                    mag[i] -= r;
+                }
+            }
         }
     }
 

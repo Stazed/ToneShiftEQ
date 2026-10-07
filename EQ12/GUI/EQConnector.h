@@ -83,7 +83,7 @@ public:
     }
 
     // multi instance spectrum
-    bool checkNewData(void* ptr) override {
+    uint64_t checkNewData(void* ptr) override {
         Engine* e = (Engine*) ptr;
         return e->ana->hasNewData();
     }
@@ -104,7 +104,7 @@ public:
     }
 
     // single instance spectrum
-    bool checkNewData() override {
+    uint64_t checkNewData() override {
         return engine->ana->hasNewData();
     }
 
@@ -120,7 +120,7 @@ public:
         engine->ana->clearFlag();
     }
 
-    bool checkNewInData() override {
+    uint64_t checkNewInData() override {
         return engine->anain->hasNewData();
     }
 

@@ -58,7 +58,7 @@ public:
 
         write_index = 0;
         read_index  = 1;
-        buffer_ready.store(false, std::memory_order_relaxed);
+        buffer_ready.store(0, std::memory_order_relaxed);
 
         fft.init(N);
 
@@ -100,7 +100,7 @@ public:
         for (int i = 0; i < bins; ++i)
             smooth[i] = -90.0f;
 
-        buffer_ready.store(false, std::memory_order_release);
+        buffer_ready.store(0, std::memory_order_release);
     }
 
     void processBlock(const float* input, int n_samples) {
@@ -132,12 +132,12 @@ public:
         return mags[read_index];
     }
 
-    bool hasNewData() const {
+    uint64_t hasNewData() const {
         return buffer_ready.load(std::memory_order_acquire);
     }
 
     void clearFlag() {
-        buffer_ready.store(false, std::memory_order_release);
+        //buffer_ready.store(false, std::memory_order_release);
     }
 
     int getBins() const { return bins; }
@@ -179,7 +179,7 @@ private:
     int write_index = 0;
     int read_index  = 1;
 
-    std::atomic<bool> buffer_ready {false};
+    std::atomic<uint32_t> buffer_ready {0};
 
     float norm_factor = 1.0f;
 
@@ -278,6 +278,6 @@ private:
         write_index = read_index;
         read_index  = new_read;
 
-        buffer_ready.store(true, std::memory_order_release);
+        buffer_ready.fetch_add(1, std::memory_order_relaxed);
     }
 };

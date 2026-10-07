@@ -13,46 +13,42 @@ ifneq ($(UNAME_M),$(TARGET_ARCH))
   $(info $(yellow) INFO: $(reset)Cross Compile $(blue)$(UNAME_M)$(reset) to $(blue)$(TARGET_ARCH)$(reset))
 endif
 
+
 # avoid optimisation for x86_64 arch when we cross compile
 ifneq ($(CROSS_COMPILING), 1)
 
 # get flags supported by CPU
 ifeq ($(UNAME_S), FreeBSD)
-  CPU_INFO = dmesg | grep Features | tr A-Z a-z
+  CPU_FLAGS := $(shell dmesg | grep Features | tr 'A-Z' 'a-z' | tr '<>,=' '    ')
   ifeq ($(UNAME_M), amd64)
     UNAME_M = x86_64
   endif
 else
-  CPU_INFO = cat /proc/cpuinfo | grep flags
+  CPU_FLAGS := $(shell grep -m1 -i '^flags' /proc/cpuinfo 2>/dev/null)
 endif
 
-# check for sse optimisation level only on x86_64 architecture
 ifeq ($(TARGET_ARCH), x86_64)
-  ifneq ($$(filter $(CPU_INFO) | grep sse3 ) , )
+  ifneq ($(filter pni sse3,$(CPU_FLAGS)),)
     SSE_CFLAGS = -msse3 -mfpmath=sse -mfxsr -DUSE_SSE=1
-    FFT_FLAG = -DFFTCONVOLVER_USE_SSE=1
-  else ifneq ($$(filter $(CPU_INFO) | grep sse2 ) , )
+    FFT_FLAG   = -DFFTCONVOLVER_USE_SSE=1
+  else ifneq ($(filter sse2,$(CPU_FLAGS)),)
     SSE_CFLAGS = -msse2 -mfpmath=sse -mfxsr -DUSE_SSE=1
-    FFT_FLAG = -DFFTCONVOLVER_USE_SSE=1
-  else ifneq ($$(filter $(CPU_INFO) | grep sse ) , )
+    FFT_FLAG   = -DFFTCONVOLVER_USE_SSE=1
+  else ifneq ($(filter sse,$(CPU_FLAGS)),)
     SSE_CFLAGS = -msse -mfpmath=sse -mfxsr -DUSE_SSE=1
-    FFT_FLAG = -DFFTCONVOLVER_USE_SSE=1
-  else ifneq ($$(filter $(CPU_INFO) | grep ARM ) , )
-    ifneq ($$(filter $(CPU_INFO) | grep ARMv7 ) , )
-      ifneq ($$(filter $(CPU_INFO) | grep vfpd32 ) , )
-        SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3 
-      else ifneq ($$(filter $(CPU_INFO) | grep vfpv3 ) , )
-        SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3
-      endif
-    else
-      ARMCPU = "YES"
-    endif
+    FFT_FLAG   = -DFFTCONVOLVER_USE_SSE=1
   endif
-else
-  SSE_CFLAGS =
+else ifeq ($(TARGET_ARCH), arm)
+  ARM_FEATURES := $(shell grep -m1 -i '^features' /proc/cpuinfo 2>/dev/null)
+  ifneq ($(filter vfpv3 vfpd32,$(ARM_FEATURES)),)
+    SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3
+  endif
+else ifeq ($(TARGET_ARCH), aarch64)
+  ARMCPU = "YES"
 endif
 
 endif
+
 
 
 ifeq ($(MAKECMDGOALS),debug)
@@ -93,6 +89,7 @@ endif
 
 	FFT_DIR := ./AudioFFT/
 	FFT_SOURCE := $(FFT_DIR)AudioFFT.cpp
+	FFT_OBJ    := AudioFFT.o
 
 	BUNDLE := ToneShiftEQ.lv2
 	LV2_DIR := ./lv2/
@@ -103,22 +100,22 @@ endif
 
 	CLAP_DIR := ./clap/
 	CLAP_INCLUDE := -I./clap/clap/ -I./clap/
-	CLAP_SOURCES := $(CLAP_DIR)ToneShiftEQClap.cpp $(FFT_SOURCE)
+	CLAP_SOURCES := $(CLAP_DIR)ToneShiftEQClap.cpp $(FFT_OBJ)
 
 	VST3_DIR := ./vst3/
 	VST3_INCLUDE := -I./vst3/travesty -I./vst3/
-	VST3_SOURCES := $(VST3_DIR)ToneShiftEQVST3.cpp $(FFT_SOURCE)
+	VST3_SOURCES := $(VST3_DIR)ToneShiftEQVST3.cpp $(FFT_OBJ)
 	ARCH = `echo $(UNAME_S) | tr A-Z a-z`
 	VST3_BUNDLE := $(VST3_NAME).vst3/Contents/$(UNAME_M)-$(ARCH)/
 
 ifeq ($(TARGET), Linux)
 	# set compile flags
 	GUI_LDFLAGS += -I$(HEADER_DIR) -Wl,-Bstatic -L. $(UI_LIB) \
-	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
+	-fdata-sections -ffunction-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
 	-Wl,-Bdynamic `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11`
 
 	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile `\
-	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
+	-ffast-math -ffinite-math-only -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
 
 	S_CFLAGS = `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags jack `
@@ -149,10 +146,10 @@ else ifeq ($(TARGET), Windows)
 	-L. $(UI_LIB) -lm $(PAWPAW_LFLAGS)
 
 	CFLAGS := -Wall -fstack-protector -fvisibility=hidden \
-	-fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
+	-fdata-sections -ffunction-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile `
 
-	CXXFLAGS += -MMD -std=c++17 -fno-math-errno -fno-trapping-math -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
+	CXXFLAGS += -std=c++17 -fno-math-errno -fno-trapping-math -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
 	TTLUPDATE = sed -i '/lv2:binary/ s/\.so/\.dll/ ' ../bin/$(BUNDLE)/manifest.ttl
 	TTLUPDATEGUI = sed -i '/a guiext:X11UI/ s/X11UI/WindowsUI/ ; /guiext:binary/ s/\.so/\.dll/ ' ../bin/$(BUNDLE)/$(NAME).ttl
@@ -160,7 +157,7 @@ else ifeq ($(TARGET), Windows)
 endif
 
 	# invoke build files
-	OBJECTS = main.cpp $(FFT_SOURCE)
+	OBJECTS = main.cpp $(FFT_OBJ)
 
 	DEPS = $(NAME)_app.d $(NAME)_lv2.d $(NAME)_clap.d $(NAME).d $(NAME)_ui.d $(NAME)_vst3.d
 
@@ -199,7 +196,7 @@ ifneq ($(TARGET), Windows)
 	@$(B_ECHO) "================= LV2 DONE =====================$(reset)"
 endif
 
-vst3: $(VST3_NAME)
+vst3: $(VST3_NAME).$(LIB_EXT)
 	@$(B_ECHO) "Create $(VST3_BUNDLE) $(reset)"
 	$(QUIET)mkdir -p ../bin/
 	$(QUIET)mkdir -p ../bin/$(VST3_BUNDLE)
@@ -277,6 +274,10 @@ uninstall :
 	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTALL_DIR)/$(NAME).clap
 	$(QUIET)rm -rf $(DESTDIR)$(VST3_INSTALL_DIR)/$(VST3_NAME).vst3
 
+$(FFT_OBJ): $(FFT_SOURCE)
+	@$(B_ECHO) "Compiling $(FFT_OBJ) $(reset)"
+	$(QUIET)$(CXX) -c -MMD -MF AudioFFT.d $(CXXFLAGS) $< -o $@
+
 $(NAME) : $(OBJECTS)
 ifeq ($(TARGET), Windows)
 	@$(B_ECHO) "Stand-alone not supported under Windows $(reset)"
@@ -304,18 +305,18 @@ ifeq (,$(filter yes,$(DEBUG)))
 endif
 endif
 
-$(NAME).$(LIB_EXT): $(LV2_PLUGIN).cpp
+$(NAME).$(LIB_EXT): $(LV2_PLUGIN).cpp $(FFT_OBJ)
 ifeq ($(TARGET), Windows)
 	@$(B_ECHO) "LV2 not supported under Windows $(reset)"
 else
 	@$(B_ECHO) "Compiling $(NAME).$(LIB_EXT) $(reset)"
-	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_lv2.d $(CXXFLAGS) $(LV2_INCLUDE) $(LV2_PLUGIN).cpp $(FFT_SOURCE) -o $(NAME).$(LIB_EXT) $(LDFLAGS)
+	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_lv2.d $(CXXFLAGS) $(LV2_INCLUDE) $(LV2_PLUGIN).cpp -o $(NAME).$(LIB_EXT) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).$(LIB_EXT)
 endif
 endif
 
-$(VST3_NAME): $(VST3_SOURCES)
+$(VST3_NAME).$(LIB_EXT): $(VST3_SOURCES)
 	@$(B_ECHO) "Compiling $(VST3_NAME).$(LIB_EXT) $(reset)"
 	$(QUIET)$(CXX) -shared -MMD -MF $(NAME)_vst3.d $(CXXFLAGS) $(VST3_INCLUDE) $(VST3_SOURCES) -o $(VST3_NAME).$(LIB_EXT)  $(LDFLAGS) $(GUI_LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
