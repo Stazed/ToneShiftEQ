@@ -142,12 +142,12 @@ void Xtoneshifteq::run_dsp_(uint32_t n_samples) {
 
     // check for parameter changes
     for (int i = 0; i< engine.param.getParamCount(); i++) {
-        if (engine.param.getParam(i) != (*par[i])) {
+        if (engine.param.getParam(i) != (double)(*par[i])) {
             if (i > 0 && i < 85) { // filter update
                 engine.processIR.store(true, std::memory_order_release);
                 engine.workToDo.store(true, std::memory_order_release);
             }
-            engine.param.setParam((int)i, (*par[i]));
+            engine.param.setParam((int)i, (double)(*par[i]));
         }
     }
     // get request from UI to send the IR data
@@ -169,7 +169,10 @@ void Xtoneshifteq::run_dsp_(uint32_t n_samples) {
 
     // draw inline display when supported
     if (queue_draw) {
-        if (ana.hasNewData()) queue_draw->queue_draw(queue_draw->handle);
+        if (ana.hasNewData() != lastAnaSeq) {
+            lastAnaSeq = ana.hasNewData();
+            queue_draw->queue_draw(queue_draw->handle);
+        }
     }
     // report latency
     *(latency) = (int)*(par[84]) ? 0 : engine.conv->getLatency();
@@ -180,7 +183,7 @@ void Xtoneshifteq::run_dsp_(uint32_t n_samples) {
                                           + sizeof(LV2_Atom_Vector_Body) + 64; 
 
     // send in spectrum 
-    if (anain.hasNewData()) {
+    if (anain.hasNewData() != lastAnaInSeq) {
         size_t needed = atom_overhead + anain.getBins() * sizeof(float);
         if (forge.size - forge.offset >= needed) {
             LV2_Atom_Forge_Frame frame;
@@ -190,11 +193,12 @@ void Xtoneshifteq::run_dsp_(uint32_t n_samples) {
             lv2_atom_forge_vector(&this->forge, sizeof(float), uris->atom_Float,
                                   anain.getBins(), (void*)anain.getMagnitudes());
             lv2_atom_forge_pop(&this->forge, &frame);
+            lastAnaInSeq = anain.hasNewData();
             anain.clearFlag();
         }
     }
     // send spectrum
-    if (ana.hasNewData()) {
+    if (ana.hasNewData() != lastAnaSeq) {
         size_t needed = atom_overhead + ana.getBins() * sizeof(float);
         if (forge.size - forge.offset >= needed) {
             LV2_Atom_Forge_Frame frame;
@@ -204,6 +208,7 @@ void Xtoneshifteq::run_dsp_(uint32_t n_samples) {
             lv2_atom_forge_vector(&this->forge, sizeof(float), uris->atom_Float,
                                   ana.getBins(), (void*)ana.getMagnitudes());
             lv2_atom_forge_pop(&this->forge, &frame);
+            lastAnaSeq = ana.hasNewData();
             ana.clearFlag();
         }
     }

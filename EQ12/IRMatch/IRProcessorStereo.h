@@ -187,6 +187,14 @@ public:
         updateIR();
     }
 
+    bool fetchLatestIR(std::pair<Vec, Vec>& dst, uint64_t& lastSeq) {
+        std::lock_guard<std::mutex> l(irMutex_);
+        if (irSeq_ == lastSeq) return false;
+        dst = readyIR_;
+        lastSeq = irSeq_;
+        return true;
+    }
+
     std::pair<Vec, Vec> createIRStereo() {
         if (!mag_ir_L_.size()) make_flat(mag_ir_L_, analysisN / 2 + 1);
         if (!mag_ir_R_.size()) make_flat(mag_ir_R_, analysisN / 2 + 1);
@@ -314,6 +322,10 @@ private:
 
     Vec sidechain_mag_;
     std::mutex sidechainMutex_;
+
+    std::pair<Vec, Vec> readyIR_;
+    uint64_t            irSeq_ = 0;
+    std::mutex          irMutex_;
 
     static void dc_block(Vec& buf) {
         if (buf.empty()) return;
@@ -443,9 +455,9 @@ private:
                 }
                 break;
         }
-        
+
         constexpr double eps = 1e-12;
-        const bool needSmooth   = std::abs(smooth_amount_)   > eps;
+        const bool needSmooth = std::abs(smooth_amount_) > eps;
 
         if (duck_mode_ && !sc_local.empty()) {
             Vec sc = remap_mag_bins(sc_local, analysisN, synthesisN);
@@ -510,9 +522,9 @@ private:
                 for (auto& v : out.ref)  v -= out.peak;
                 for (auto& v : out.src)  v -= out.peak;
                 if (haveSource && haveReference) {
-                    double peak_d = *std::max_element(out.diff.begin(), out.diff.end());
-                    double peak_m = *std::min_element(out.diff.begin(), out.diff.end());
-                    std::cout << peak_d << "  " << peak_m << std::endl;
+                    //double peak_d = *std::max_element(out.diff.begin(), out.diff.end());
+                    //double peak_m = *std::min_element(out.diff.begin(), out.diff.end());
+                    //std::cout << peak_d << "  " << peak_m << std::endl;
                     //peak_d = 0.0 - peak_d;
                     //std::cout << peak_d << std::endl;
                     //for (auto& v : out.diff) v -= peak_d;
@@ -542,6 +554,12 @@ private:
         processChannel(refL, srcL, out.left, mag_ir_L_, rebuild);
         processChannel(refR, srcR, out.right, mag_ir_R_, rebuild);
 
+        auto ir = createIRStereo();
+        {
+            std::lock_guard<std::mutex> l(irMutex_);
+            readyIR_ = std::move(ir);
+            ++irSeq_;
+        }
         updateGuiCurves(out);
 
         workerReady = true;
@@ -625,7 +643,7 @@ private:
     }
 
     static double db(double x) {
-        return 20.0 * std::log10(std::max<double>(x, EPS));
+        return 20.0 * std::log10(x > EPS ? x : EPS);
     }
 
     static double db2lin(double x) {

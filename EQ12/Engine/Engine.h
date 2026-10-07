@@ -71,6 +71,7 @@ public:
                                                     float* output, float* output1);
 
 private:
+    using Vec  = std::vector<double>;
     ParallelThread                  par;
     float*                          abuffer = nullptr;
     uint32_t                        frames = 0;
@@ -82,6 +83,7 @@ private:
     float                           sidechain_gain = 0.0f;
     float                           direct_gain = 0.0f;
     int                             duck_mode_ = 0;
+    uint64_t                        lastAnaSeq_ = 0;
 
     float                           spectrumThrottle = 0.0f; 
     static constexpr float          spectrumThrottleMs = 10.0f; 
@@ -91,7 +93,7 @@ private:
     int                             warmupBlocks = 1;
     float                           fadeGain = 1.0f;
     static constexpr float          fadeStep = 0.25f;
-
+    uint64_t                        lastIRSeq_ = 0;
     enum class ModeState { Running, FadingOut, FadingIn };
     ModeState modeState = ModeState::Running;
 
@@ -301,7 +303,8 @@ void Engine::do_work_mono() {
     }
 
     if (convLoadIR.load(std::memory_order_acquire)) {
-        conv->setIR(ip->createIRStereo());
+        std::pair<Vec, Vec> ir;
+        if (ip->fetchLatestIR(ir, lastIRSeq_)) conv->setIR(ir);
         convLoadIR.store(false, std::memory_order_release);
     }
 
@@ -373,8 +376,9 @@ inline void Engine::processBufferIn() {
     if (!frames) return;
         anain->processBlock(abuffer, frames);
 
-    if ((ip->duck_mode && anain->hasNewData()) || duck_mode_ != ip->duck_mode) {
+    if ((ip->duck_mode && (anain->hasNewData() != lastAnaSeq_)) || duck_mode_ != ip->duck_mode) {
         duck_mode_ = ip->duck_mode;
+        lastAnaSeq_ = anain->hasNewData();
 
         spectrumThrottle += (float)frames/(s_rate*0.001);
 
@@ -395,15 +399,17 @@ inline void Engine::processBuffer() {
 
 inline void Engine::feedAnanlyzer(uint32_t nframes, uint32_t proc, const float* output, const float* output1) {
     // if nframes is bigger then 8192, we must clip (shouldn't be the case on normal hosts)
-    frames = nframes > 8192 ? 8192 : nframes;
-    for (uint32_t i = 0; i < frames; ++i) {
-        const float l = std::fabs(output[i]);
-        const float r = std::fabs(output1[i]);
-        abuffer[i] = (l > r) ? output[i] : output1[i];
-    }
+    if (par.getProcess()) {
+        frames = nframes > 8192 ? 8192 : nframes;
+        for (uint32_t i = 0; i < frames; ++i) {
+            const float l = std::fabs(output[i]);
+            const float r = std::fabs(output1[i]);
+            abuffer[i] = (l > r) ? output[i] : output1[i];
+        }
 
-    par.setProcessor(proc);
-    par.runProcess();
+        par.setProcessor(proc);
+        par.runProcess();
+    }
 }
 
 inline void Engine::process(uint32_t nframes, const float* sideput,
@@ -485,9 +491,7 @@ inline void Engine::process(uint32_t nframes, const float* sideput,
     processDynamic();
     applyDynamicGains();
     com.setBypass(conv->bypass);
-    if (!ip->duck_mode) {
-        com.processBlock(nframes, output, output1);
-    }
+    com.processBlock(nframes, output, output1);
 
     if (fadeGain < 1.0f) {
         for (uint32_t i = 0; i < nframes; ++i) {

@@ -1,4 +1,3 @@
-
 /*
  * SpectrumViewer.h
  *
@@ -230,6 +229,13 @@ public:
 
         Widget_t* laframe = add_my_z_frame(spec,"", 0, 331, width-130, 100);
         laframe->scale.gravity = WESTEAST;
+        #if defined(_WIN32)
+        {
+            laframe->flags |= DONT_PROPAGATE;
+            LONG_PTR st = GetWindowLongPtr(laframe->widget, GWL_STYLE);
+            SetWindowLongPtr(laframe->widget, GWL_STYLE, st | WS_CLIPCHILDREN);
+        }
+        #endif
 
         ph = add_my_button(spec, width-165, 0, 20, 20, "φ");
         ph->parent_struct = this;
@@ -240,6 +246,13 @@ public:
         for (int i = 0; i<FilterTypes::NumFilters; i++) {
             frame[i] = add_my_panel(laframe,"", 275, 0, 270, 99);
             frame[i]->scale.gravity = NORTCENTER;
+            #if defined(_WIN32)
+            {
+                frame[i]->flags |= DONT_PROPAGATE;
+                LONG_PTR st = GetWindowLongPtr(frame[i]->widget, GWL_STYLE);
+                SetWindowLongPtr(frame[i]->widget, GWL_STYLE, st | WS_CLIPCHILDREN);
+            }
+            #endif
             double r,g,bcol;
             get_band_color(i, r, g, bcol);
             set_widget_color(frame[i], (Color_state)0, (Color_mod)1, r, g, bcol, 1.0);
@@ -579,31 +592,39 @@ public:
         adj_set_value(vuinmeterL->adj, power2db(vuinmeterL, conn->getInMeterL()));
         adj_set_value(vuinmeterR->adj, power2db(vuinmeterR, conn->getInMeterR()));
         bool setRefresh = false;
-        if (conn->checkNewInData()) {
+        float mx = -200.f;
+        if (conn->checkNewInData() != lastAnaInSeq) {
             bin[0] = conn->getInBins();
             magin_.clear();
             const float* m = conn->getInMagnitudes();
             for (int i = 0; i<bin[0]; i++) {
                 magin_.push_back(m[i]);
+                mx = std::max<float>(mx, m[i]);
             }
+            lastAnaInSeq = conn->checkNewInData();
             conn->clearInAna();
-            setRefresh = true;
+            if (mx > -90.f) setRefresh = true;
         }
         int p = 0;
         for (const auto& instance : instances) {
-            if (conn->checkNewData(instance.ptr)) {
+            if (conn->checkNewData(instance.ptr) != lastAnaSeq[p]) {
                 bin[p] = conn->getBins(instance.ptr);
                 mag_[p].clear();
                 const float* m = conn->getMagnitudes(instance.ptr);
                 for (int i = 0; i<bin[p]; i++) {
                     mag_[p].push_back(m[i]);
+                    mx = std::max<float>(mx, m[i]);
                 }
-                //conn->clearAna(instance.ptr);
-                setRefresh = true;
+                lastAnaSeq[p] = conn->checkNewData(instance.ptr);
+                conn->clearAna(instance.ptr);
+                if (mx > -90.f) setRefresh = true;
             }
             p++;
         }
-        if (setRefresh) expose_widget(spec);
+       if (setRefresh) {
+           expose_widget(spec);
+           expose_widget(frame[active_panel]);
+       }
     }
 
     void check_irmatch() {
@@ -648,6 +669,9 @@ private:
     Vec phase_; // phase
     Vec mag_[12]; // spectrum
     Vec magin_; // input spectrum
+
+    uint64_t lastAnaSeq[12] = {0};
+    uint64_t lastAnaInSeq = 0;
 
     uint32_t icount = 0;
     bool instanceChanged = false;
@@ -695,6 +719,35 @@ private:
         std::vector<double> freq;
         std::vector<std::complex<double>> zInv, zInv2, alpha;
     };
+
+    // --- Draw caches (GUI thread only) ---------------------------------
+
+    // Frequency LUTs: one slot per filter model (0 = tanh/gauss, 1 = biquad, 2 = SVF),
+    // so the dynamic overlay (always model 1) and the static curves don't evict each other.
+    BandCurveLUTs lutCache_[3];
+    int           lutCacheWidth_[3] = {-1, -1, -1};
+    double        lutCacheSR_[3]    = {-1.0, -1.0, -1.0};
+
+    // Visible x-range per band ([0] = static curves, [1] = dynamic overlay).
+    struct BandRangeCache {
+        bool   valid = false;
+        int    model = 0, type = 0, width = 0, steps = 0;
+        double freq = 0.0, Q = 0.0, gd = 0.0, sr = 0.0, eps = 0.0;
+        int    xLo = 0, xHi = 0;
+    };
+    BandRangeCache rangeCache_[2][FilterTypes::NumFilters];
+
+    // Spectrum pixel -> FFT bin mapping. Depends only on width, bin count and sample rate.
+    // A few slots, because ir_/phase_/magin_/mag_[] may have different bin counts.
+    static constexpr int SPEC_PX_STEP = 1;   // 2 = one line point per 2 px (cheaper)
+    struct SpecMap {
+        int   width = -1, bins = -1;
+        float sr = -1.0f;
+        std::vector<float> px;
+        std::vector<float> bin;
+    };
+    SpecMap specMaps_[4];
+    int     specMapNext_ = 0;
 
     typedef struct {
         double r, g, b, a;
@@ -1824,6 +1877,18 @@ private:
         return lut;
     }
 
+    // Cached variant: rebuilt only when width, sample rate or model change.
+    const BandCurveLUTs& get_frequency_luts(int width, int steps, int model) {
+        const int idx = (model == 1 || model == 2) ? model : 0;
+        if (lutCacheWidth_[idx] != width || lutCacheSR_[idx] != sampleRate ||
+            lutCache_[idx].freq.size() != (size_t)steps) {
+            lutCache_[idx] = build_frequency_luts(width, steps, model);
+            lutCacheWidth_[idx] = width;
+            lutCacheSR_[idx] = sampleRate;
+        }
+        return lutCache_[idx];
+    }
+
     template <typename DbFunc>
     double findEdgeOctaves(DbFunc dbAt, double epsilon, double startOct, double sign) {
         double lo = 0.0, hi = startOct;
@@ -1979,7 +2044,7 @@ private:
         const float y0 = db_to_y(0.0, db_min, db_max, height);
         const double epsilon_db = 0.5 * (db_max - db_min) / (double)height;
 
-        BandCurveLUTs lut = build_frequency_luts(width, STEPS, MODEL);
+        const BandCurveLUTs& lut = get_frequency_luts(width, STEPS, MODEL);
 
         for (int i = 0; i < FilterTypes::NumFilters; ++i) {
             if (!(int)conn->getParameterValue(i * 6 + 1)) continue;
@@ -2010,8 +2075,17 @@ private:
 
             BandFilterModel model = build_band_model(MODEL, type, bandFreq, Q, gd, sampleRate);
 
-            int xLo, xHi;
-            compute_band_x_range(model, epsilon_db, sampleRate, width, STEPS, xLo, xHi);
+            // x-range only depends on the band parameters -> cache it
+            BandRangeCache& rc = rangeCache_[dyn ? 1 : 0][i];
+            if (!(rc.valid && rc.model == MODEL && rc.type == type && rc.width == width &&
+                  rc.steps == STEPS && rc.freq == bandFreq && rc.Q == Q && rc.gd == gd &&
+                  rc.sr == sampleRate && rc.eps == epsilon_db)) {
+                compute_band_x_range(model, epsilon_db, sampleRate, width, STEPS, rc.xLo, rc.xHi);
+                rc.valid = true;
+                rc.model = MODEL; rc.type = type; rc.width = width; rc.steps = STEPS;
+                rc.freq = bandFreq; rc.Q = Q; rc.gd = gd; rc.sr = sampleRate; rc.eps = epsilon_db;
+            }
+            const int xLo = rc.xLo, xHi = rc.xHi;
 
             double startX, stopX;
             build_band_path(cr, model, lut, xLo, xHi, y0, height, startX, stopX);
@@ -2323,6 +2397,27 @@ private:
         #endif
     }
 
+    // Pixel -> FFT bin mapping, cached per (width, bins, sample rate).
+    const SpecMap& get_spec_map(int width, int bins, float sample_rate) {
+        for (auto& m : specMaps_) {
+            if (m.width == width && m.bins == bins && m.sr == sample_rate) return m;
+        }
+        SpecMap& m = specMaps_[specMapNext_];
+        specMapNext_ = (specMapNext_ + 1) % 4;
+        m.width = width; m.bins = bins; m.sr = sample_rate;
+        m.px.clear(); m.bin.clear();
+        const int fft_size = bins * 2;
+        for (int px = 0; px < width; px += SPEC_PX_STEP) {
+            float freq = x_to_freq((float)px, f_min, f_max, (float)width);
+            float bin = freq * fft_size / sample_rate;
+            if (bin < 1.0f) continue;
+            if (bin > bins - 3) break;
+            m.px.push_back((float)px);
+            m.bin.push_back(bin);
+        }
+        return m;
+    }
+
     void drawSpectrum(cairo_t* cr, const Vec& mags, int width, int height, float dB_min, float dB_max,
                       double line_width, float sample_rate, float r, float g, float b, const char* label,
                       float label_y, bool dash = false, bool fill = false) {
@@ -2341,29 +2436,25 @@ private:
             cairo_set_dash(cr, dashes, 0, 0);
         }
 
-        int bins = mags.size();
-        int fft_size = bins * 2;
+        const int bins = (int)mags.size();
+        const SpecMap& sm = get_spec_map(width, bins, sample_rate);
+        const size_t n = sm.px.size();
+        if (n == 0) return;
 
-        bool started = false;
+        for (size_t k = 0; k < n; ++k) {
+            const float y = db_to_y(hermiteLookup(mags, sm.bin[k]), dB_min, dB_max, height);
+            if (k == 0) cairo_move_to(cr, sm.px[k], y);
+            else        cairo_line_to(cr, sm.px[k], y);
+        }
 
-        for (int px = 0; px < width; ++px) {
-            float freq = x_to_freq((float)px, f_min, f_max, (float)width);
-            float bin = freq * fft_size / sample_rate;
-            if (bin < 1.0f) continue;
-            if (bin > bins - 3) break;
-            float mag = hermiteLookup(mags, bin);
-            float y = db_to_y(mag, dB_min, dB_max, height);
-            if (!started) {
-                cairo_move_to(cr, px, y);
-                started = true;
-            } else {
-                cairo_line_to(cr, px, y);
-            }
+        if (!fill) {
+            cairo_stroke(cr);
+            return;
         }
         cairo_stroke_preserve(cr);
-    
+
         // Spectrum fill
-        if (started && fill) {
+        {
             //cairo_set_source_rgba(cr,  0.17, 0.82, 0.64, 0.15);
             cairo_line_to(cr, width, height);
             cairo_line_to(cr, 3, height);
@@ -2375,6 +2466,6 @@ private:
             cairo_fill(cr);
             cairo_pattern_destroy(pat);
         }
-        cairo_stroke(cr);
+        cairo_new_path(cr);
     }
 };

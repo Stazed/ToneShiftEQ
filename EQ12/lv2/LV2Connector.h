@@ -101,7 +101,7 @@ public:
     }
 
     // multi instance spectrum stub
-    bool checkNewData(void* ptr) override {
+    uint64_t checkNewData(void* ptr) override {
         return 0;
     }
 
@@ -117,7 +117,7 @@ public:
     }
 
     // single instance spectrum stub
-    bool checkNewData() override {
+    uint64_t checkNewData() override {
         return 0;
     }
 
@@ -133,7 +133,7 @@ public:
 
     }
 
-    bool checkNewInData() override {
+    uint64_t checkNewInData() override {
         return 0;
     }
 

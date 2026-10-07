@@ -38,17 +38,17 @@ public:
 
     virtual float getDynamics(int index) = 0;
 
-    virtual bool checkNewData() = 0;
+    virtual uint64_t checkNewData() = 0;
     virtual int getBins() = 0;
     virtual const float* getMagnitudes() = 0;
     virtual void clearAna() = 0;
 
-    virtual bool checkNewData(void* ptr) = 0;
+    virtual uint64_t checkNewData(void* ptr) = 0;
     virtual int getBins(void* ptr) = 0;
     virtual const float* getMagnitudes(void* ptr) = 0;
     virtual void clearAna(void* ptr) = 0;
 
-    virtual bool checkNewInData() = 0;
+    virtual uint64_t checkNewInData() = 0;
     virtual int getInBins() = 0;
     virtual const float* getInMagnitudes() = 0;
     virtual void clearInAna() = 0;
