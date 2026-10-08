@@ -181,10 +181,10 @@ public:
     const bool irReady() { return engine.dataReady.load(std::memory_order_acquire); }
     const std::vector<float>& getIRMag() { return ip.getIRMag(); }
     const std::vector<float>& getPhase() { return ip.getIRPhase(); }
-    const bool hasNewInData() { return anain.hasNewData(); }
+    const uint64_t hasNewInData() { return anain.hasNewData(); }
     const float* getInMagnitudes() { return anain.getMagnitudes(); }
     const int getInBins() { return anain.getBins(); }
-    const bool hasNewData() { return ana.hasNewData(); }
+    const uint64_t hasNewData() { return ana.hasNewData(); }
     const float* getMagnitudes() { return ana.getMagnitudes(); }
     const int getBins() { return ana.getBins(); }
     static const LV2_Inline_Display_Image_Surface* render_inline(

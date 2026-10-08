@@ -98,18 +98,22 @@ public:
 
     void setInSpec(const float* data, int bin) {
         magin_.clear();
+        float mx = -200.0f;
         for (int i = 0; i<bin; i++) {
             magin_.push_back(data[i]);
+            mx = std::max<float>(mx, data[i]);
         }
-        os_expose_widget(spec);
+        if (mx > -90.f) expose_widget(spec);
     }
 
     void setSpec(const float* data, int bin) {
         mag_[0].clear();
+        float mx = -200.0f;
         for (int i = 0; i<bin; i++) {
             mag_[0].push_back(data[i]);
+            mx = std::max<float>(mx, data[i]);
         }
-        os_expose_widget(spec);
+        if (mx > -90.f) expose_widget(spec);
     }
 
     void setFilter(const float* data, int bin) {
@@ -622,8 +626,10 @@ public:
             p++;
         }
        if (setRefresh) {
-           expose_widget(spec);
-           expose_widget(frame[active_panel]);
+            expose_widget(spec);
+            #if defined(_WIN32)
+            expose_widget(frame[active_panel]);
+            #endif
        }
     }
 

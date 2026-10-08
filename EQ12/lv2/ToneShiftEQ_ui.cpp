@@ -50,6 +50,8 @@ public:
     SpectrumViewer sw;
     bool check;
     bool haveAccess;
+    uint64_t lastAnaSeq = 0;
+    uint64_t lastAnaInSeq = 0;
 
     static LV2UI_Handle instantiate(const LV2UI_Descriptor* descriptor,
             const char* plugin_uri, const char* bundle_path,
@@ -370,12 +372,12 @@ int XToneShiftEQ_UI::idle(LV2UI_Handle handle) {
             self->sw.setFilter(self->engine->getIRMag().data(), 4096);
             self->sw.setPhase(self->engine->getPhase().data(), 1024);
         }
-        if (self->engine->hasNewInData() != self->engine->lastAnaInSeq) {
-            self->engine->lastAnaInSeq = self->engine->hasNewInData();
+        if (self->engine->hasNewInData() != self->lastAnaInSeq) {
+            self->lastAnaInSeq = self->engine->hasNewInData();
             self->sw.setInSpec(self->engine->getInMagnitudes(), self->engine->getInBins());
         }
-        if (self->engine->hasNewData() != self->engine->lastAnaSeq) {
-            self->engine->lastAnaSeq = self->engine->hasNewData();
+        if (self->engine->hasNewData() != self->lastAnaSeq) {
+            self->lastAnaSeq = self->engine->hasNewData();
             self->sw.setSpec(self->engine->getMagnitudes(), self->engine->getBins());
         }
    } else if (self->check) {
