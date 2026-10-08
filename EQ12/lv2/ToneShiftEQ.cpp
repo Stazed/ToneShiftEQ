@@ -170,7 +170,9 @@ void Xtoneshifteq::run_dsp_(uint32_t n_samples) {
     // draw inline display when supported
     if (queue_draw) {
         if (ana.hasNewData() != lastAnaSeq) {
-            lastAnaSeq = ana.hasNewData();
+            // only reset here when we've instance-access
+            if (!atomTransfer.load(std::memory_order_acquire))
+                lastAnaSeq = ana.hasNewData();
             queue_draw->queue_draw(queue_draw->handle);
         }
     }
