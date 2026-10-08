@@ -2318,8 +2318,7 @@ private:
         if (spec_height != height || spec_width != width) {
             if(eq_layer) cairo_surface_destroy(eq_layer);
             eq_layer = nullptr;
-            eq_layer = cairo_surface_create_similar (w->surface,
-                                CAIRO_CONTENT_COLOR_ALPHA, width, height);
+            eq_layer = cairo_surface_create_similar (w->surface, CAIRO_CONTENT_COLOR_ALPHA, width, height);
             if (!eq_layer || cairo_surface_status(eq_layer) != CAIRO_STATUS_SUCCESS) {
                 eq_layer = nullptr;
                 return;
@@ -2337,8 +2336,8 @@ private:
         cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
         draw_band_points(cr, width, height);
         draw_band_curves(cr, false, width, height);
-        if (show_ph) drawSpectrum(cr, phase_, width, height, db_min, db_max, 1, sample_rate, 0.945, 0.114, 0.192, "",        height-80);
-        drawSpectrum(cr, ir_,    width, height, db_min, db_max, 2.5, sample_rate, 0.545, 0.914, 0.992, "",      height-80);
+        if (show_ph) drawSpectrum(cr, phase_, width, height, db_min, db_max, 1, sample_rate, 0.945, 0.114, 0.192, "", height-80);
+        drawSpectrum(cr, ir_, width, height, db_min, db_max, 2.5, sample_rate, 0.545, 0.914, 0.992, "", height-80);
         cairo_destroy(cr);
         rebuild_eq_layer = false;
     }
@@ -2450,7 +2449,7 @@ private:
         for (size_t k = 0; k < n; ++k) {
             const float y = db_to_y(hermiteLookup(mags, sm.bin[k]), dB_min, dB_max, height);
             if (k == 0) cairo_move_to(cr, sm.px[k], y);
-            else        cairo_line_to(cr, sm.px[k], y);
+            else cairo_line_to(cr, sm.px[k], y);
         }
 
         if (!fill) {

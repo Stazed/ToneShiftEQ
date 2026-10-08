@@ -73,7 +73,7 @@ public:
 private:
     using Vec  = std::vector<double>;
     ParallelThread                  par;
-    float*                          abuffer = nullptr;
+    float*                          abuffer[2] = {nullptr};
     uint32_t                        frames = 0;
     uint32_t                        instanceId = 0;
     int                             zoom_step = 0; // ui parameter
@@ -122,9 +122,10 @@ inline Engine::Engine(IRProcessor *ip_, IRMorpherStereo* conv_, FFTAnalyzer* ana
         anain = anain_;
         vu = vu_;
         vuin = vuin_;
-        
-        abuffer = new float[8192];
-        memset(abuffer, 0, 8192 * sizeof(float));
+        for (int i = 0; i < 2; i++) {
+            abuffer[i] = new float[8192];
+            memset(abuffer[i], 0, 8192 * sizeof(float));
+        }
 
         for (auto& g : dynGainOffset)
             g.store(0.0f, std::memory_order_relaxed);
@@ -140,7 +141,8 @@ inline Engine::~Engine(){
     ana->cleanup();
     xrworker.stop();
     par.stop();
-    delete[] abuffer;
+    delete[] abuffer[0];
+    delete[] abuffer[1];
 
 };
 
@@ -374,7 +376,7 @@ inline void Engine::applyDynamicGains() {
 
 inline void Engine::processBufferIn() {
     if (!frames) return;
-        anain->processBlock(abuffer, frames);
+        anain->processBlock(abuffer[0], frames);
 
     if ((ip->duck_mode && (anain->hasNewData() != lastAnaSeq_)) || duck_mode_ != ip->duck_mode) {
         duck_mode_ = ip->duck_mode;
@@ -394,7 +396,7 @@ inline void Engine::processBufferIn() {
 
 inline void Engine::processBuffer() {
     if (!frames) return;
-        ana->processBlock(abuffer, frames);
+        ana->processBlock(abuffer[1], frames);
 }
 
 inline void Engine::feedAnanlyzer(uint32_t nframes, uint32_t proc, const float* output, const float* output1) {
@@ -404,7 +406,7 @@ inline void Engine::feedAnanlyzer(uint32_t nframes, uint32_t proc, const float* 
         for (uint32_t i = 0; i < frames; ++i) {
             const float l = std::fabs(output[i]);
             const float r = std::fabs(output1[i]);
-            abuffer[i] = (l > r) ? output[i] : output1[i];
+            abuffer[proc][i] = (l > r) ? output[i] : output1[i];
         }
 
         par.setProcessor(proc);

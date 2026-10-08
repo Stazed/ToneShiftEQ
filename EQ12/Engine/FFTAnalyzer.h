@@ -48,6 +48,7 @@ public:
         if (fft_size < 8 || (fft_size & (fft_size - 1)) != 0)
             return;
 
+        R = 1 -(M_PI * 2 * 20.0f/sr);
         N = fft_size;
         bins = fft_size / 2;
         sample_rate = sr;
@@ -111,7 +112,7 @@ public:
             float v = input[i];
             if (!std::isfinite(v)) v = 0.0f;
 
-            float y = v - dc_x1 + 0.995f * dc_y1;
+            float y = v - dc_x1 + R * dc_y1;
             dc_x1 = v;
             dc_y1 = y;
 
@@ -162,7 +163,7 @@ public:
 
 private:
     int N = 0, bins = 0;
-    float dc_x1 = 0.0f, dc_y1 = 0.0f;
+    float dc_x1 = 0.0f, dc_y1 = 0.0f, R = 0.995;
     float sample_rate = 0.0f;
 
     audiofft::AudioFFT fft;

@@ -254,48 +254,59 @@ static const clap_plugin_state_t state_extension = {
  ** GUI handling
  */
 
-static bool toneshifteq_gui_is_api_supported(const clap_plugin *plugin, const char *api, bool is_floating) {
+static bool toneshifteq_gui_is_api_supported(const clap_plugin *plugin, const char *api, bool is_floating) noexcept {
     return strcmp(api, GUIAPI) == 0;
 }
 
-static bool toneshifteq_gui_get_preferred_api(const clap_plugin_t *plugin, const char **api, bool *isFloating) {
+static bool toneshifteq_gui_get_preferred_api(const clap_plugin_t *plugin, const char **api, bool *isFloating) noexcept {
     *api = GUIAPI;
     *isFloating = false;
     return true;
 }
 
-static bool toneshifteq_gui_set_scale(const clap_plugin_t *plugin, double scale) {
+static bool toneshifteq_gui_set_scale(const clap_plugin_t *plugin, double scale) noexcept {
     // the GUI scale anyway to any given size, so nothing to do here.
     return true;
 }
 
-static bool toneshifteq_gui_get_size(const clap_plugin_t *plugin, uint32_t *width, uint32_t *height) {
+static bool toneshifteq_gui_get_size(const clap_plugin_t *plugin, uint32_t *width, uint32_t *height) noexcept {
     toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
     *width = plug->r->sw.top->width;
     *height = plug->r->sw.top->height;
     return true;
 }
 
-static bool toneshifteq_gui_can_resize(const clap_plugin_t *plugin) {
+static bool toneshifteq_gui_can_resize(const clap_plugin_t *plugin) noexcept {
     return true;
 }
 
-static bool toneshifteq_gui_get_resize_hints(const clap_plugin_t *plugin, clap_gui_resize_hints_t *hints) {
-    return false;
+static bool getGuiResizeHints(clap_gui_resize_hints_t* hints) noexcept {
+    if (!hints) return false;
+    std::memset(hints, 0, sizeof(clap_gui_resize_hints_t));
+    hints->can_resize_horizontally = true;
+    hints->can_resize_vertically   = true;
+    hints->preserve_aspect_ratio   = false;
+    hints->aspect_ratio_width      = 0;
+    hints->aspect_ratio_height     = 0;
+    return true;
 }
 
-static bool toneshifteq_gui_adjust_size(const clap_plugin_t *plugin, uint32_t *width, uint32_t *height) {
+static bool toneshifteq_gui_get_resize_hints(const clap_plugin_t *plugin, clap_gui_resize_hints_t *hints) noexcept {
+    return getGuiResizeHints(hints);
+}
+
+static bool toneshifteq_gui_adjust_size(const clap_plugin_t *plugin, uint32_t *width, uint32_t *height) noexcept {
     toneshifteq_plugin_t *plug = (toneshifteq_plugin_t *)plugin->plugin_data;
     plug->width = *width;
     plug->height = *height;
     return true;   
 }
 
-static bool toneshifteq_gui_set_transient(const clap_plugin_t *plugin, const clap_window_t *window) {
+static bool toneshifteq_gui_set_transient(const clap_plugin_t *plugin, const clap_window_t *window) noexcept {
     return false;
 }
 
-static void toneshifteq_gui_suggest_title(const clap_plugin_t *plugin, const char *title) {
+static void toneshifteq_gui_suggest_title(const clap_plugin_t *plugin, const char *title) noexcept {
     title = "ToneShiftEQ";
 }
 

@@ -59,6 +59,13 @@ public:
         fetch.stop();
     }
 
+    #if defined(_WIN32)
+    static VOID CALLBACK guiTimerProc(HWND, UINT, UINT_PTR id, DWORD) {
+        ToneShiftEQ* self = reinterpret_cast<ToneShiftEQ*>(id);
+        self->runGui();
+    }
+    #endif
+
     void startGui(Window window) {
         main_init(sw.getMain());
         #if defined(_WIN32)
@@ -71,8 +78,12 @@ public:
         sw.top->flags |= HIDE_ON_DELETE;
         widget_set_title(sw.top, title.c_str());
         sw.create();
+        #if defined(_WIN32)
+        SetTimer(sw.top->widget, (UINT_PTR)this, 16, &ToneShiftEQ::guiTimerProc);
+        #else
         fetch.startTimeout(16);
         fetch.set<ToneShiftEQ, &ToneShiftEQ::runGui>(this);
+        #endif
     }
 
     void startGui() {
@@ -81,8 +92,12 @@ public:
         sw.top->func.expose_callback = sw.draw_window;
         sw.top->flags |= HIDE_ON_DELETE;
         sw.create();
+        #if defined(_WIN32)
+        SetTimer(sw.top->widget, (UINT_PTR)this, 16, &ToneShiftEQ::guiTimerProc);
+        #else
         fetch.startTimeout(16);
         fetch.set<ToneShiftEQ, &ToneShiftEQ::runGui>(this);
+        #endif
     }
 
     void showGui() {
@@ -134,7 +149,11 @@ public:
 
     void quitGui() {
         cleanup();
+        #if defined(_WIN32)
+        KillTimer(sw.top->widget, (UINT_PTR)this);
+        #else
         fetch.stop();
+        #endif
         sw.quitGui();
         main_quit(sw.getMain());
     }
