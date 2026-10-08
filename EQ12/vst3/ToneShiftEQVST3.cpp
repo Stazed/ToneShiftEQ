@@ -343,6 +343,7 @@ struct toneshifteq_controller : v3_edit_controller_cpp {
     toneshifteq_view* viewPtr = nullptr;
 
     explicit toneshifteq_controller(ToneShiftEQ* p, PluginMode m) : plugin(p), mode(m) {
+        p->engine.param.setParam(84,(int)mode);
         query_interface = query_interface_controller;
         ref             = ref_controller;
         unref           = unref_controller;
